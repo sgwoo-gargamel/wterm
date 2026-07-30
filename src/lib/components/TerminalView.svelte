@@ -103,7 +103,7 @@
 		width: 100%;
 		height: 100%;
 		background: var(--bg-panel);
-		padding: 4px 0 0 6px;
+		padding: 4px 0 4px 6px;
 		box-sizing: border-box;
 		overflow: hidden;
 	}
