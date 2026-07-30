@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>wterm — 아키텍처 및 라이브러리 설계</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1f2430;
+    --muted: #5c6370;
+    --accent: #2563eb;
+    --border: #e2e5ea;
+    --code-bg: #f5f7fa;
+    --table-head: #f0f2f6;
+    --pick: #0a7d33;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", "Malgun Gothic", Apple SD Gothic Neo, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.65;
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 2.5rem 1.5rem 5rem; }
+  h1 { font-size: 1.9rem; margin: 0 0 .3rem; }
+  h1 + p.subtitle { color: var(--muted); margin-top: 0; }
+  h2 {
+    font-size: 1.35rem;
+    margin-top: 3rem;
+    padding-bottom: .4rem;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 { font-size: 1.05rem; margin-top: 1.8rem; }
+  code, pre {
+    font-family: "Cascadia Code", Consolas, monospace;
+    font-size: .875em;
+  }
+  code { background: var(--code-bg); padding: .12em .4em; border-radius: 4px; }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    line-height: 1.5;
+  }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .93rem; }
+  th, td { border: 1px solid var(--border); padding: .5rem .75rem; text-align: left; vertical-align: top; }
+  th { background: var(--table-head); }
+  .pick { color: var(--pick); font-weight: 600; }
+  .badge {
+    display: inline-block;
+    font-size: .75rem;
+    padding: .1em .55em;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    border-radius: 999px;
+    margin-left: .5em;
+    vertical-align: middle;
+  }
+  ul li, ol li { margin: .25rem 0; }
+  .note {
+    border-left: 3px solid var(--accent);
+    background: var(--code-bg);
+    padding: .7rem 1rem;
+    border-radius: 0 8px 8px 0;
+    margin: 1rem 0;
+  }
+  .toc { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.5rem; }
+  .toc ol { margin: .3rem 0; padding-left: 1.2rem; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>wterm 아키텍처 설계</h1>
+<p class="subtitle">시리얼 · SSH · Telnet 지원 타일형 터미널 앱 — 구조 및 라이브러리 선정 (2026-07-28)</p>
+
+<nav class="toc">
+<strong>목차</strong>
+<ol>
+  <li><a href="#requirements">요구사항 정리</a></li>
+  <li><a href="#stack">기술 스택 개요</a></li>
+  <li><a href="#libraries">라이브러리 선정</a></li>
+  <li><a href="#architecture">전체 아키텍처</a></li>
+  <li><a href="#ipc">IPC 설계 (Commands / Channels)</a></li>
+  <li><a href="#tiling">타일 분할 설계</a></li>
+  <li><a href="#history">연결 이력 저장</a></li>
+  <li><a href="#structure">디렉토리 구조</a></li>
+  <li><a href="#roadmap">구현 로드맵</a></li>
+</ol>
+</nav>
+
+<h2 id="requirements">1. 요구사항 정리</h2>
+<table>
+  <tr><th>기능</th><th>상세</th></tr>
+  <tr><td>시리얼 접속</td><td>포트 선택(자동 목록), baud rate 설정 (data bits / parity / stop bits는 기본값 8-N-1, 추후 확장)</td></tr>
+  <tr><td>SSH 접속</td><td>IP(호스트), 포트(기본 22), 사용자 ID. 인증: 비밀번호 (추후 키 파일 확장)</td></tr>
+  <tr><td>Telnet 접속</td><td>IP(호스트), 포트(기본 23), 사용자 ID (로그인 프롬프트 자동/수동 입력)</td></tr>
+  <tr><td>화면 분할</td><td>타일(tile) 방식 — 가로/세로 분할을 반복해 임의의 레이아웃 구성, 각 타일에 독립 세션</td></tr>
+  <tr><td>이력 저장</td><td>연결 설정(프로파일) 목록을 로컬에 저장, 재접속 시 선택만으로 연결</td></tr>
+</table>
+
+<h2 id="stack">2. 기술 스택 개요</h2>
+<p>프로젝트는 이미 <strong>Tauri 2 + SvelteKit(Svelte 5, static adapter) + Vite 6 + TypeScript</strong>로 스캐폴딩되어 있으며, 이 구성을 그대로 사용한다.</p>
+<table>
+  <tr><th>레이어</th><th>기술</th><th>역할</th></tr>
+  <tr><td>셸 / 백엔드</td><td>Tauri 2 (Rust)</td><td>시리얼/SSH/Telnet I/O, 세션 관리, 네이티브 API</td></tr>
+  <tr><td>프론트엔드</td><td>SvelteKit + Svelte 5 (runes)</td><td>UI, 타일 레이아웃, 터미널 렌더링</td></tr>
+  <tr><td>비동기 런타임</td><td>tokio</td><td>세션별 read/write 태스크 (Tauri 2 내장 런타임)</td></tr>
+</table>
+<div class="note">
+핵심 원칙: <strong>모든 네트워크/시리얼 I/O는 Rust 측에서 수행</strong>하고, 프론트엔드는 바이트 스트림을 렌더링하는 뷰 역할만 한다. WebView에서는 raw TCP/serial 접근이 불가능하므로 이 분리는 필수이며, 보안·성능 면에서도 유리하다.
+</div>
+
+<h2 id="libraries">3. 라이브러리 선정</h2>
+
+<h3>3.1 Rust (백엔드) 크레이트</h3>
+<table>
+  <tr><th>용도</th><th>선정<span class="badge">채택</span></th><th>대안</th><th>선정 이유</th></tr>
+  <tr>
+    <td>시리얼 통신</td>
+    <td class="pick">serialport</td>
+    <td>tokio-serial</td>
+    <td>사실상 표준 크레이트. 포트 열거(<code>available_ports()</code>) 지원, Windows/macOS/Linux 모두 동작. 블로킹 API지만 세션당 전용 read 스레드로 감싸면 충분하며, async 래퍼(tokio-serial)보다 의존성이 단순함.</td>
+  </tr>
+  <tr>
+    <td>SSH 클라이언트</td>
+    <td class="pick">russh</td>
+    <td>ssh2 (libssh2 바인딩)</td>
+    <td>순수 Rust + tokio 네이티브 async. C 라이브러리 빌드 의존성이 없어 Windows 크로스 빌드가 깔끔함. PTY 요청, 창 크기 변경(window-change), 비밀번호/공개키 인증 모두 지원.</td>
+  </tr>
+  <tr>
+    <td>Telnet</td>
+    <td class="pick">tokio TcpStream + 자체 IAC 처리</td>
+    <td>libtelnet-rs</td>
+    <td>Telnet은 TCP 위에 IAC(0xFF) 옵션 협상만 얹은 프로토콜. 필요한 협상(ECHO, SGA, NAWS, TERMINAL-TYPE)만 200줄 내외로 직접 구현하는 편이 외부 크레이트 유지보수 리스크보다 낫다.</td>
+  </tr>
+  <tr>
+    <td>이력/설정 저장</td>
+    <td class="pick">tauri-plugin-store</td>
+    <td>rusqlite</td>
+    <td>공식 플러그인, JSON 파일 기반 key-value. 프로파일 수십~수백 개 수준에는 DB가 과함. 프론트/백엔드 양쪽에서 접근 가능.</td>
+  </tr>
+  <tr>
+    <td>직렬화</td>
+    <td class="pick">serde / serde_json</td>
+    <td>—</td>
+    <td>이미 포함됨. IPC 페이로드와 프로파일 직렬화에 사용.</td>
+  </tr>
+  <tr>
+    <td>에러 처리</td>
+    <td class="pick">thiserror</td>
+    <td>anyhow</td>
+    <td>커맨드별 에러 타입을 프론트에 구조화된 형태로 전달하기 위해 라이브러리 스타일인 thiserror 채택.</td>
+  </tr>
+</table>
+
+<h3>3.2 프론트엔드 (npm) 패키지</h3>
+<table>
+  <tr><th>용도</th><th>선정<span class="badge">채택</span></th><th>대안</th><th>선정 이유</th></tr>
+  <tr>
+    <td>터미널 에뮬레이터</td>
+    <td class="pick">@xterm/xterm</td>
+    <td>hterm</td>
+    <td>업계 표준(VS Code 내장 터미널). VT100/xterm 이스케이프 시퀀스 완전 지원, 애드온 생태계 풍부.</td>
+  </tr>
+  <tr>
+    <td>터미널 애드온</td>
+    <td class="pick">@xterm/addon-fit<br>@xterm/addon-webgl<br>@xterm/addon-search</td>
+    <td>addon-canvas (WebGL 미지원 환경 폴백)</td>
+    <td>fit: 타일 크기에 맞춰 rows/cols 자동 계산 → 리사이즈 이벤트로 백엔드에 전달. webgl: 다중 타일에서도 렌더링 성능 확보. search: 출력 검색.</td>
+  </tr>
+  <tr>
+    <td>타일 분할 레이아웃</td>
+    <td class="pick">자체 구현 (이진 트리 + CSS flex)</td>
+    <td>dockview-core, golden-layout</td>
+    <td>요구사항이 "타일 분할"에 한정되므로 탭/도킹/팝아웃까지 가진 무거운 라이브러리 불필요. 이진 분할 트리는 Svelte 5 runes 상태로 ~200줄이면 구현 가능하고, 레이아웃 직렬화·복원도 자유로움. (추후 탭 필요 시 dockview 재검토)</td>
+  </tr>
+  <tr>
+    <td>Tauri API</td>
+    <td class="pick">@tauri-apps/api<br>@tauri-apps/plugin-store</td>
+    <td>—</td>
+    <td>invoke / Channel / 이벤트, store 플러그인 JS 바인딩.</td>
+  </tr>
+</table>
+
+<h2 id="architecture">4. 전체 아키텍처</h2>
+<pre><code>┌────────────────────────── WebView (SvelteKit) ──────────────────────────┐
+│                                                                         │
+│  TileLayout (이진 트리)                                                  │
+│  ├─ Pane #1 ─ TerminalView(xterm) ─┐                                    │
+│  ├─ Pane #2 ─ TerminalView(xterm) ─┼─ sessionStore (Svelte 5 runes)     │
+│  └─ Pane #3 ─ ConnectDialog        │   · 세션 상태 / 활성 타일           │
+│                                    │                                    │
+│  ProfileList (연결 이력)            │                                    │
+└────────────┬───────────────────────┴────────────▲───────────────────────┘
+             │ invoke(command)                    │ Channel&lt;Vec&lt;u8&gt;&gt; (출력 스트림)
+             │ session_write / resize / close     │ + 상태 이벤트 (connected/closed/error)
+┌────────────▼─────────────────── Tauri (Rust) ───┴───────────────────────┐
+│                                                                         │
+│  SessionManager  ─ HashMap&lt;SessionId, SessionHandle&gt;                    │
+│       │                                                                 │
+│       ├─ Session (trait: write / resize / close)                        │
+│       │    ├─ SerialSession  ── serialport (전용 read 스레드)            │
+│       │    ├─ SshSession     ── russh (tokio 태스크, PTY channel)        │
+│       │    └─ TelnetSession  ── TcpStream + IAC 협상 (tokio 태스크)      │
+│       │                                                                 │
+│       └─ 각 세션의 read 루프 → Channel로 바이트 push → xterm.write()      │
+│                                                                         │
+│  ProfileStore ── tauri-plugin-store (profiles.json)                     │
+└─────────────────────────────────────────────────────────────────────────┘</code></pre>
+
+<h3>데이터 흐름</h3>
+<ol>
+  <li><strong>연결:</strong> 사용자가 다이얼로그에서 설정 입력 → <code>session_open(profile, channel)</code> invoke → Rust가 transport 연결 후 <code>SessionId</code> 반환, 프로파일을 이력에 저장.</li>
+  <li><strong>출력 (device → 화면):</strong> 세션 read 루프가 받은 바이트를 Tauri 2 <code>Channel&lt;Vec&lt;u8&gt;&gt;</code>로 push → 프론트에서 <code>term.write(bytes)</code>. 이벤트 시스템보다 Channel이 스트리밍에 적합(순서 보장, 브로드캐스트 오버헤드 없음).</li>
+  <li><strong>입력 (키보드 → device):</strong> xterm <code>onData</code> → <code>session_write(id, data)</code> invoke → transport에 write.</li>
+  <li><strong>리사이즈:</strong> 타일 크기 변경 → fit addon이 cols/rows 재계산 → <code>session_resize(id, cols, rows)</code> → SSH는 window-change, Telnet은 NAWS 전송 (시리얼은 no-op).</li>
+  <li><strong>종료:</strong> 원격 종료 또는 사용자 종료 → 상태 이벤트로 프론트에 통지 → 타일에 "연결 종료" 표시.</li>
+</ol>
+
+<h2 id="ipc">5. IPC 설계</h2>
+<h3>Tauri Commands</h3>
+<pre><code>// 연결 프로파일 (serde tagged enum)
+#[serde(tag = "type", rename_all = "snake_case")]
+enum Profile {
+  Serial { port: String, baud_rate: u32 },
+  Ssh    { host: String, port: u16, username: String },
+  Telnet { host: String, port: u16, username: String },
+}
+
+list_serial_ports() -&gt; Vec&lt;SerialPortInfo&gt;          // 포트 드롭다운용
+session_open(profile: Profile,
+             cols: u16, rows: u16,
+             on_output: Channel&lt;OutputEvent&gt;) -&gt; SessionId
+session_write(id: SessionId, data: Vec&lt;u8&gt;)
+session_resize(id: SessionId, cols: u16, rows: u16)
+session_close(id: SessionId)
+
+// OutputEvent: Data(Vec&lt;u8&gt;) | Connected | Disconnected { reason } | Error { message }
+// SSH 비밀번호는 프로파일에 저장하지 않고 연결 시점에 별도 인자로 전달</code></pre>
+
+<h2 id="tiling">6. 타일 분할 설계</h2>
+<p>레이아웃을 <strong>이진 트리</strong>로 표현한다. 리프 노드는 하나의 pane(터미널 세션 또는 빈 타일), 내부 노드는 분할 방향과 비율을 가진다.</p>
+<pre><code>type LayoutNode =
+  | { kind: "pane";  id: string; sessionId: string | null }
+  | { kind: "split"; direction: "row" | "column";
+      ratio: number;          // 0~1, 첫 자식 비율
+      children: [LayoutNode, LayoutNode] }</code></pre>
+<ul>
+  <li><strong>분할:</strong> 활성 pane을 <code>split</code> 노드로 치환하고 기존 pane + 새 pane을 자식으로 배치 (Ctrl+Shift+D 가로 / Ctrl+Shift+E 세로).</li>
+  <li><strong>닫기:</strong> pane 제거 시 형제 노드를 부모 위치로 승격.</li>
+  <li><strong>리사이즈:</strong> 분할선 드래그로 <code>ratio</code> 조정 → CSS <code>flex-basis</code> 반영 → 각 터미널 fit addon 재실행.</li>
+  <li><strong>포커스:</strong> 활성 pane 하나를 전역 상태로 관리, 키보드 입력·분할 명령의 대상.</li>
+  <li><strong>렌더링:</strong> 재귀 Svelte 컴포넌트 (<code>TileNode.svelte</code>가 자기 자신을 렌더) + flexbox. 트리 전체는 JSON 직렬화 가능하므로 마지막 레이아웃 복원도 store에 저장해 지원 가능.</li>
+</ul>
+
+<h2 id="history">7. 연결 이력 저장</h2>
+<p><code>tauri-plugin-store</code>로 앱 데이터 디렉토리에 <code>profiles.json</code>을 저장한다.</p>
+<pre><code>{
+  "profiles": [
+    { "id": "uuid", "name": "장비 A 콘솔",
+      "type": "serial", "port": "COM3", "baud_rate": 115200,
+      "last_used": "2026-07-28T15:00:00Z" },
+    { "id": "uuid", "name": "빌드 서버",
+      "type": "ssh", "host": "192.168.0.10", "port": 22, "username": "admin",
+      "last_used": "2026-07-27T09:30:00Z" }
+  ]
+}</code></pre>
+<ul>
+  <li>연결 성공 시 동일 설정 존재 여부를 확인해 <code>last_used</code>만 갱신, 없으면 새 항목 추가.</li>
+  <li>목록은 <code>last_used</code> 내림차순으로 표시, 이름 변경/삭제/즐겨찾기 지원.</li>
+  <li><strong>비밀번호는 저장하지 않는다.</strong> 추후 저장이 필요해지면 OS 자격 증명 저장소(Windows Credential Manager)를 쓰는 <code>keyring</code> 크레이트로 확장.</li>
+</ul>
+
+<h2 id="structure">8. 디렉토리 구조 (목표)</h2>
+<pre><code>wterm/
+├─ docs/
+│  └─ architecture.html          # 이 문서
+├─ src/                          # SvelteKit 프론트엔드
+│  ├─ lib/
+│  │  ├─ components/
+│  │  │  ├─ TileLayout.svelte    # 레이아웃 루트
+│  │  │  ├─ TileNode.svelte      # 재귀 분할 노드
+│  │  │  ├─ TerminalView.svelte  # xterm 래퍼 (fit/webgl/search)
+│  │  │  ├─ ConnectDialog.svelte # 연결 설정 폼 (serial/ssh/telnet 탭)
+│  │  │  └─ ProfileList.svelte   # 연결 이력 사이드바
+│  │  ├─ stores/
+│  │  │  ├─ layout.svelte.ts     # 타일 트리 상태 (runes)
+│  │  │  └─ sessions.svelte.ts   # 세션 상태
+│  │  └─ ipc.ts                  # invoke/Channel 타입 안전 래퍼
+│  └─ routes/+page.svelte
+└─ src-tauri/src/
+   ├─ lib.rs                     # 플러그인/커맨드 등록
+   ├─ commands.rs                # IPC 커맨드
+   ├─ session/
+   │  ├─ mod.rs                  # SessionManager, Session trait
+   │  ├─ serial.rs               # serialport
+   │  ├─ ssh.rs                  # russh
+   │  └─ telnet.rs               # TcpStream + IAC
+   └─ error.rs                   # thiserror 기반 에러</code></pre>
+
+<h2 id="roadmap">9. 구현 로드맵</h2>
+<ol>
+  <li><strong>M1 — 시리얼 단일 세션:</strong> xterm 단일 뷰 + serialport 연결, 포트 목록/baud 설정, 입출력 왕복 확인.</li>
+  <li><strong>M2 — 세션 추상화 + Telnet:</strong> Session trait / SessionManager 정리, Telnet(IAC 협상) 추가.</li>
+  <li><strong>M3 — SSH:</strong> russh 연결(비밀번호 인증), PTY + resize 처리.</li>
+  <li><strong>M4 — 타일 분할:</strong> 이진 트리 레이아웃, 분할/닫기/드래그 리사이즈, 세션-타일 연결.</li>
+  <li><strong>M5 — 연결 이력:</strong> plugin-store 프로파일 저장/목록/재연결 UI.</li>
+  <li><strong>M6 — 다듬기:</strong> 검색 애드온, 복사/붙여넣기, 폰트·테마 설정, 레이아웃 복원.</li>
+</ol>
+
+</main>
+</body>
+</html>

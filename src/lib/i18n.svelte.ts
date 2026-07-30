@@ -1,0 +1,186 @@
+import { getSetting, setSetting } from './persist';
+
+export type Locale = 'ko' | 'en';
+
+const ko = {
+	'group.addTile': '창 추가',
+	'group.logDir': '로그 폴더',
+	'group.settings': '설정',
+	'toolbar.addLeft': '왼쪽에 타일 추가',
+	'toolbar.addRight': '오른쪽에 타일 추가',
+	'toolbar.addUp': '위에 타일 추가',
+	'toolbar.addDown': '아래에 타일 추가',
+	'toolbar.close': '닫기',
+	'toolbar.theme': '테마 전환',
+	'pane.empty': '새 연결',
+	'pane.splitRight': '좌우 분할',
+	'pane.splitDown': '상하 분할',
+	'pane.maximize': '확대',
+	'pane.restore': '축소',
+	'toolbar.logDir': '저장 폴더 설정',
+	'multi.placeholder': '멀티 입력',
+	'multi.send': '전송',
+	'multi.all': '전체',
+	'multi.target': '멀티 입력 받기',
+	'multi.label': '멀티',
+	'log.title': '로그 저장',
+	'log.fileName': '파일 이름',
+	'log.timestamp': '각 줄에 수신 시각 기록',
+	'log.plain': '제어 문자 제거 (순수 텍스트)',
+	'log.start': '저장 시작',
+	'log.stop': '저장 중지',
+	'log.saving': '저장 중',
+	'log.noDir': '저장 폴더를 먼저 설정하세요',
+	'toolbar.settings': '폰트 설정',
+	'settings.fontFamily': '터미널 폰트',
+	'settings.fontSize': '폰트 크기',
+	'settings.reset': '폰트 초기화',
+	'settings.colors': '색상',
+	'settings.colorBg': '배경',
+	'settings.colorFg': '글자',
+	'settings.colorCursor': '커서',
+	'settings.colorAccent': '강조',
+	'settings.resetColors': '색상 초기화',
+	'color.theme': '테마 색',
+	'color.standard': '표준 색',
+	'color.custom': '다른 색…',
+	'settings.fontWeight': '굵기',
+	'settings.weight.light': '가늘게',
+	'settings.weight.normal': '보통',
+	'settings.weight.medium': '중간',
+	'settings.weight.bold': '굵게',
+	'tab.serial': '시리얼',
+	'tab.local': '로컬',
+	'form.shell': '셸',
+	'form.noDistros': '사용 가능한 셸 없음',
+	'form.startDir': '시작 위치',
+	'form.startDirHome': '기본: 사용자 홈',
+	'form.startDirWsl': '기본: 배포판 홈',
+	'form.browse': '폴더 선택',
+	'form.port': '포트',
+	'form.baudRate': 'Baud rate',
+	'form.host': '호스트 (IP)',
+	'form.username': '사용자 ID',
+	'form.usernameOptional': ' (선택, 프롬프트 자동 입력)',
+	'form.password': '비밀번호 (SSH 키 인증 실패 시 사용, 저장되지 않음)',
+	'error.passwordRequired': '사용 가능한 SSH 키가 없습니다. 비밀번호를 입력하세요',
+	'form.connect': '연결',
+	'form.connecting': '연결 중…',
+	'form.noPorts': '포트 없음',
+	'form.portInUse': '사용 중',
+	'form.refreshPorts': '포트 새로고침',
+	'history.title': '최근 연결',
+	'history.empty': '저장된 연결 이력이 없습니다',
+	'history.remove': '이력에서 삭제',
+	'overlay.reconnect': '다시 연결',
+	'overlay.newConnection': '새 연결',
+	'overlay.closeTile': '닫기',
+	'reason.closed': '연결이 종료되었습니다',
+	'reason.remote-closed': '원격 호스트가 연결을 종료했습니다',
+	'reason.write-failed': '전송 실패: 연결이 끊어졌습니다'
+};
+
+const en: Record<MessageKey, string> = {
+	'group.addTile': 'Add pane',
+	'group.logDir': 'Log folder',
+	'group.settings': 'Settings',
+	'toolbar.addLeft': 'Add tile left',
+	'toolbar.addRight': 'Add tile right',
+	'toolbar.addUp': 'Add tile above',
+	'toolbar.addDown': 'Add tile below',
+	'toolbar.close': 'Close',
+	'toolbar.theme': 'Toggle theme',
+	'pane.empty': 'New connection',
+	'pane.splitRight': 'Split right',
+	'pane.splitDown': 'Split down',
+	'pane.maximize': 'Maximize',
+	'pane.restore': 'Restore',
+	'toolbar.logDir': 'Log folder',
+	'multi.placeholder': 'Multi-send',
+	'multi.send': 'Send',
+	'multi.all': 'All',
+	'multi.target': 'Receive multi-send',
+	'multi.label': 'Multi',
+	'log.title': 'Save log',
+	'log.fileName': 'File name',
+	'log.timestamp': 'Timestamp each line',
+	'log.plain': 'Strip control codes (plain text)',
+	'log.start': 'Start saving',
+	'log.stop': 'Stop saving',
+	'log.saving': 'Saving',
+	'log.noDir': 'Set a log folder first',
+	'toolbar.settings': 'Font settings',
+	'settings.fontFamily': 'Terminal font',
+	'settings.fontSize': 'Font size',
+	'settings.reset': 'Reset font',
+	'settings.colors': 'Colors',
+	'settings.colorBg': 'Background',
+	'settings.colorFg': 'Text',
+	'settings.colorCursor': 'Cursor',
+	'settings.colorAccent': 'Accent',
+	'settings.resetColors': 'Reset colors',
+	'color.theme': 'Theme colors',
+	'color.standard': 'Standard colors',
+	'color.custom': 'More colors…',
+	'settings.fontWeight': 'Weight',
+	'settings.weight.light': 'Light',
+	'settings.weight.normal': 'Normal',
+	'settings.weight.medium': 'Medium',
+	'settings.weight.bold': 'Bold',
+	'tab.serial': 'Serial',
+	'tab.local': 'Local',
+	'form.shell': 'Shell',
+	'form.noDistros': 'No shells available',
+	'form.startDir': 'Start directory',
+	'form.startDirHome': 'Default: user home',
+	'form.startDirWsl': 'Default: distro home',
+	'form.browse': 'Browse',
+	'form.port': 'Port',
+	'form.baudRate': 'Baud rate',
+	'form.host': 'Host (IP)',
+	'form.username': 'Username',
+	'form.usernameOptional': ' (optional, auto-entered at prompt)',
+	'form.password': 'Password (used if key auth fails; not saved)',
+	'error.passwordRequired': 'No usable SSH key. Enter a password',
+	'form.connect': 'Connect',
+	'form.connecting': 'Connecting…',
+	'form.noPorts': 'No ports',
+	'form.portInUse': 'in use',
+	'form.refreshPorts': 'Refresh ports',
+	'history.title': 'Recent connections',
+	'history.empty': 'No saved connection history',
+	'history.remove': 'Remove from history',
+	'overlay.reconnect': 'Reconnect',
+	'overlay.newConnection': 'New connection',
+	'overlay.closeTile': 'Close',
+	'reason.closed': 'Connection closed',
+	'reason.remote-closed': 'The remote host closed the connection',
+	'reason.write-failed': 'Send failed: connection lost'
+};
+
+export type MessageKey = keyof typeof ko;
+
+const messages: Record<Locale, Record<MessageKey, string>> = { ko, en };
+
+export const i18n = $state<{ locale: Locale }>({ locale: 'ko' });
+
+export function initLocale() {
+	const saved = getSetting('locale');
+	if (saved === 'ko' || saved === 'en') i18n.locale = saved;
+}
+
+export function setLocale(locale: Locale) {
+	i18n.locale = locale;
+	setSetting('locale', locale);
+}
+
+export function t(key: MessageKey): string {
+	return messages[i18n.locale][key] ?? key;
+}
+
+/** Backend sends stable tokens (closed, remote-closed, ...); raw error text passes through as-is */
+export function translateReason(reason: string): string {
+	const key = `reason.${reason}` as MessageKey;
+	const table = messages[i18n.locale];
+	return key in table ? table[key] : reason;
+}
