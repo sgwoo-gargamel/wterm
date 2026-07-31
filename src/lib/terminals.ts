@@ -9,10 +9,33 @@ import { settingsState } from './stores/settings.svelte';
 
 export const XTERM_THEMES: Record<Theme, ITheme> = {
 	dark: {
+		// Kept at the app's panel tone rather than VS Code's #191A1B so the
+		// terminal and the pane chrome stay on one surface colour
 		background: '#14161c',
-		foreground: '#d8dce4',
+		// VS Code Dark 2026 terminal.foreground. Deliberately below pure white:
+		// near-white on near-black lands around 13:1, where light glyphs halate
+		// and read as blurry. Against our background this is ~11:1, matching
+		// VS Code's own #CCCCCC-on-#191A1B.
+		foreground: '#cccccc',
 		cursor: '#6ea3ff',
-		selectionBackground: '#33415e'
+		selectionBackground: '#3994bc33',
+		// VS Code dark ANSI palette (terminal.ansi* defaults)
+		black: '#000000',
+		red: '#cd3131',
+		green: '#0dbc79',
+		yellow: '#e5e510',
+		blue: '#2472c8',
+		magenta: '#bc3fbc',
+		cyan: '#11a8cd',
+		white: '#e5e5e5',
+		brightBlack: '#666666',
+		brightRed: '#f14c4c',
+		brightGreen: '#23d18b',
+		brightYellow: '#f5f543',
+		brightBlue: '#3b8eea',
+		brightMagenta: '#d670d6',
+		brightCyan: '#29b8db',
+		brightWhite: '#e5e5e5'
 	},
 	light: {
 		// Windows 11 light "layer" tone, same as Notepad's editor area
@@ -20,7 +43,7 @@ export const XTERM_THEMES: Record<Theme, ITheme> = {
 		foreground: '#1b1b1b',
 		cursor: '#2563eb',
 		selectionBackground: '#cce0f9',
-		// Light-friendly ANSI palette (VS Code Light+ values)
+		// VS Code light ANSI palette (terminal.ansi* defaults)
 		black: '#000000',
 		red: '#cd3131',
 		green: '#107c10',
@@ -73,6 +96,13 @@ export function getTerminal(session: Session): TermBundle {
 		fontFamily: settingsState.font.family,
 		fontSize: settingsState.font.size,
 		fontWeight: settingsState.font.weight,
+		// PuTTY-style bold: SGR 1 shows as a bright colour, not a heavier face.
+		// Synthesised bold smears badly in D2Coding at typical terminal sizes.
+		fontWeightBold: settingsState.font.weight,
+		// Matches VS Code's terminal.integrated.minimumContrastRatio default:
+		// nudge ANSI colours that land too close to the background so they stay
+		// legible. xterm's own default of 1 leaves them as sent.
+		minimumContrastRatio: 4.5,
 		cursorBlink: true,
 		scrollback: 10000,
 		theme: xtermTheme()

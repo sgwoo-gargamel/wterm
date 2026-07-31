@@ -87,6 +87,7 @@
 		term.options.fontFamily = family;
 		term.options.fontSize = size;
 		term.options.fontWeight = weight;
+		term.options.fontWeightBold = weight;
 		doFit();
 	});
 </script>
