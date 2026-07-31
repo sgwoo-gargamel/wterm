@@ -26,6 +26,7 @@
 	import TerminalView from './TerminalView.svelte';
 	import ConnectForm from './ConnectForm.svelte';
 	import ProfileList from './ProfileList.svelte';
+	import HamsterWheel from './HamsterWheel.svelte';
 
 	let { pane }: { pane: PaneNode } = $props();
 
@@ -38,27 +39,84 @@
 	let prefill = $state<Profile | null>(null);
 	let busy = $state(false);
 	let error = $state('');
+	/** Non-error status line under the form (cancellation) */
+	let notice = $state('');
+
+	// --- Connection progress popup ---
+	/** A connection that answers this fast needs no popup; slower ones get the wheel */
+	const PROGRESS_DELAY = 400;
+	let progress = $state<'connecting' | 'failed' | null>(null);
+	let progressError = $state('');
+	let progressEl = $state<HTMLElement | null>(null);
+	/** Bumped on every attempt; a late result whose id no longer matches was cancelled */
+	let attempt = 0;
 
 	function activate() {
 		layoutState.activePaneId = pane.id;
 	}
 
 	async function connect(profile: Profile, password: string | null) {
+		const id = ++attempt;
 		busy = true;
 		error = '';
+		notice = '';
+		progress = null;
+		progressError = '';
+		// Backends block until the transport is up (a TCP connect to a dead host can
+		// take ~20s), so the popup is the only way out of a stuck attempt
+		const timer = setTimeout(() => {
+			if (attempt === id) progress = 'connecting';
+		}, PROGRESS_DELAY);
 		try {
 			const s = await openSession(profile, password);
+			if (attempt !== id) {
+				// Cancelled while connecting — the session arrived anyway, drop it
+				closeSession(s.id);
+				return;
+			}
+			progress = null;
 			pane.sessionId = s.id;
 			prefill = null;
 			await recordUse(profile);
 		} catch (e) {
+			if (attempt !== id) return;
 			error = String(e);
+			// The popup stays up on failure and waits for a click; a failure that beat
+			// the popup is reported inline by the form instead
+			if (progress === 'connecting') {
+				progressError = error === 'password-required' ? t('error.passwordRequired') : error;
+				progress = 'failed';
+			}
 			// SSH: key auth failed — prefill the form so only the password is left to type
 			if (profile.type === 'ssh') prefill = { ...profile };
 		} finally {
-			busy = false;
+			clearTimeout(timer);
+			if (attempt === id) busy = false;
 		}
 	}
+
+	/** Click/Enter/Esc on the popup: cancel while connecting, dismiss once failed */
+	function dismissProgress() {
+		if (progress === 'connecting') {
+			// Abandons the attempt: the pending open is disowned by bumping the id
+			attempt++;
+			busy = false;
+			notice = t('progress.cancelled');
+		}
+		progress = null;
+	}
+
+	// Move focus to the popup so Enter/Esc reach it without a click, and hand focus
+	// back to whatever had it (usually the Connect button) once it is dismissed
+	$effect(() => {
+		if (!progress || !progressEl) return;
+		const previous = document.activeElement as HTMLElement | null;
+		progressEl.focus();
+		if (!previous || previous === progressEl) return;
+		return () => {
+			if (previous.isConnected) previous.focus();
+		};
+	});
 
 	function selectHistory(entry: ProfileEntry) {
 		// SSH tries key auth first; on failure connect() falls back to the prefilled form
@@ -78,6 +136,7 @@
 		pane.sessionId = null;
 		prefill = null;
 		error = '';
+		notice = '';
 	}
 
 	// --- Disconnect overlay: arrow keys move between buttons, Enter activates ---
@@ -339,15 +398,49 @@
 			{/if}
 		</div>
 	{:else}
-		<div class="empty-pane">
-			<div class="columns">
-				<ConnectForm {prefill} {busy} onconnect={connect} />
-				<ProfileList onselect={selectHistory} />
+		<div class="empty-wrap">
+			<div class="empty-pane">
+				<div class="columns">
+					<ConnectForm {prefill} {busy} onconnect={connect} />
+					<ProfileList onselect={selectHistory} />
+				</div>
+				{#if error}
+					<p class="error">
+						{error === 'password-required' ? t('error.passwordRequired') : error}
+					</p>
+				{:else if notice}
+					<p class="notice">{notice}</p>
+				{/if}
 			</div>
-			{#if error}
-				<p class="error">
-					{error === 'password-required' ? t('error.passwordRequired') : error}
-				</p>
+			{#if progress}
+				<!-- Click anywhere on it: cancels while connecting, dismisses once failed -->
+				<div
+					class="progress-overlay"
+					role="button"
+					tabindex="0"
+					bind:this={progressEl}
+					aria-label={progress === 'failed' ? t('progress.closeHint') : t('progress.cancelHint')}
+					onclick={dismissProgress}
+					onkeydown={(e) => {
+						if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+							e.preventDefault();
+							dismissProgress();
+						}
+					}}
+				>
+					<div class="progress-card">
+						<HamsterWheel running={progress === 'connecting'} failed={progress === 'failed'} size="9px" />
+						<p class="progress-title" class:failed={progress === 'failed'}>
+							{progress === 'failed' ? t('progress.failed') : t('form.connecting')}
+						</p>
+						{#if progress === 'failed' && progressError}
+							<p class="progress-detail">{progressError}</p>
+						{/if}
+						<p class="progress-hint">
+							{progress === 'failed' ? t('progress.closeHint') : t('progress.cancelHint')}
+						</p>
+					</div>
+				</div>
 			{/if}
 		</div>
 	{/if}
@@ -600,8 +693,16 @@
 	.actions .danger:hover {
 		background: var(--danger-bg-hover);
 	}
+	/* Positioning context for the connection progress popup */
+	.empty-wrap {
+		position: relative;
+		flex: 1;
+		min-height: 0;
+		display: flex;
+	}
 	.empty-pane {
 		flex: 1;
+		min-width: 0;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -609,6 +710,60 @@
 		gap: 1rem;
 		padding: 1.5rem;
 		overflow: auto;
+	}
+	.progress-overlay {
+		position: absolute;
+		inset: 0;
+		z-index: 25;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--overlay);
+		border: none;
+		cursor: pointer;
+		/* The whole surface is the button; its own focus ring would frame the tile */
+		outline: none;
+		overflow: hidden;
+	}
+	.progress-card {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.9rem;
+		/* Wide enough that the wheel is not cramped, capped so a small tile still fits it */
+		min-width: 280px;
+		max-width: min(420px, 92%);
+		padding: 2rem 2.6rem;
+		background: var(--bg-elev);
+		border: 1px solid var(--border-accent);
+		border-radius: 14px;
+		box-shadow: 0 10px 28px var(--shadow);
+		pointer-events: none;
+	}
+	.progress-title {
+		margin: 0;
+		font-size: 1.05rem;
+		color: var(--fg);
+	}
+	.progress-title.failed {
+		color: var(--danger);
+	}
+	.progress-detail {
+		margin: 0;
+		max-width: 340px;
+		font-size: 0.82rem;
+		color: var(--fg-muted);
+		text-align: center;
+		word-break: break-word;
+	}
+	.progress-hint {
+		margin: 0;
+		font-size: 0.8rem;
+		color: var(--fg-faint);
+	}
+	.progress-overlay:focus-visible .progress-card {
+		border-color: var(--accent);
+		box-shadow: 0 0 0 2px var(--accent);
 	}
 	.columns {
 		display: flex;
@@ -620,6 +775,12 @@
 		color: var(--danger);
 		font-size: 0.85rem;
 		max-width: 480px;
+		text-align: center;
+		margin: 0;
+	}
+	.notice {
+		color: var(--fg-muted);
+		font-size: 0.85rem;
 		text-align: center;
 		margin: 0;
 	}
