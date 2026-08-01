@@ -15,6 +15,9 @@ export class Session {
 	reason = $state('');
 	/** Absolute path of the file being written, null when not logging */
 	logPath = $state<string | null>(null);
+	/** Last known terminal size, for features that need it (e.g. serial stty) */
+	cols = 80;
+	rows = 24;
 
 	private sink: ((data: Uint8Array) => void) | null = null;
 	private buffer: Uint8Array[] = [];
@@ -56,8 +59,11 @@ export class Session {
 	}
 
 	resize(cols: number, rows: number) {
-		if (this.status === 'connected' && this.id && cols > 0 && rows > 0)
+		if (this.status === 'connected' && this.id && cols > 0 && rows > 0) {
+			this.cols = cols;
+			this.rows = rows;
 			void ipc.resizeSession(this.id, cols, rows);
+		}
 	}
 
 	close() {

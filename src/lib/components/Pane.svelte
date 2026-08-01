@@ -16,6 +16,7 @@
 	import { logBaseName, logTimestamp } from '$lib/ipc';
 	import { settingsState } from '$lib/stores/settings.svelte';
 	import { multiSend, toggleTarget } from '$lib/stores/multisend.svelte';
+	import resizeIcon from '@fluentui/svg-icons/icons/resize_20_regular.svg?raw';
 	import saveIcon from '@fluentui/svg-icons/icons/save_20_regular.svg?raw';
 	import splitVerticalIcon from '@fluentui/svg-icons/icons/split_vertical_20_regular.svg?raw';
 	import splitHorizontalIcon from '@fluentui/svg-icons/icons/split_horizontal_20_regular.svg?raw';
@@ -138,6 +139,12 @@
 	function selectHistory(entry: ProfileEntry) {
 		// SSH tries key auth first; on failure connect() falls back to the prefilled form
 		void connect(entry.profile, null);
+	}
+
+	/** Serial only: tell a Linux target the terminal size by typing stty at its shell */
+	function sendStty() {
+		if (!session) return;
+		session.write(new TextEncoder().encode(`stty rows ${session.rows} cols ${session.cols}\r`));
 	}
 
 	function reconnect() {
@@ -309,6 +316,12 @@
 			{session ? session.title : t('pane.empty')}
 		</span>
 		{#if session}
+			{#if session.profile.type === 'serial' && session.status === 'connected'}
+				<!-- Serial has no size protocol, so offer a manual stty to the target -->
+				<button type="button" class="tb" title={t('pane.sendSize')} onclick={sendStty}>
+					{@html resizeIcon}
+				</button>
+			{/if}
 			<!-- Opt this tile into toolbar multi-send -->
 			<label class="multi" title={t('multi.target')}>
 				<span>{t('multi.label')}</span>
