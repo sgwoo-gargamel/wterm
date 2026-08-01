@@ -1,46 +1,8 @@
 import { SvelteSet } from 'svelte/reactivity';
-import { getSetting, setSetting } from '$lib/persist';
 import { sessions } from './sessions.svelte';
 
 /** Session ids that receive input typed in the toolbar's multi-send box */
 export const multiSend = $state<{ targets: SvelteSet<string> }>({ targets: new SvelteSet() });
-
-/** Previously sent lines, most recent first */
-export const multiHistory = $state<{ list: string[] }>({ list: [] });
-
-const HISTORY_LIMIT = 50;
-
-export function initMultiHistory() {
-	const saved = getSetting('multi_history');
-	if (!Array.isArray(saved)) return;
-	multiHistory.list = saved
-		.filter((line): line is string => typeof line === 'string' && line.trim().length > 0)
-		.slice(0, HISTORY_LIMIT);
-}
-
-function persistHistory() {
-	setSetting('multi_history', $state.snapshot(multiHistory.list));
-}
-
-/** Move a line to the top of the history, dropping the oldest past the limit */
-function recordHistory(text: string) {
-	if (!text.trim()) return;
-	multiHistory.list = [text, ...multiHistory.list.filter((l) => l !== text)].slice(
-		0,
-		HISTORY_LIMIT
-	);
-	persistHistory();
-}
-
-export function removeHistory(text: string) {
-	multiHistory.list = multiHistory.list.filter((l) => l !== text);
-	persistHistory();
-}
-
-export function clearHistory() {
-	multiHistory.list = [];
-	persistHistory();
-}
 
 export function toggleTarget(sessionId: string, on: boolean) {
 	if (on) multiSend.targets.add(sessionId);
@@ -78,7 +40,5 @@ export function sendToTargets(text: string): number {
 			sent++;
 		}
 	}
-	// Only lines that actually reached a session are worth keeping
-	if (sent > 0) recordHistory(text);
 	return sent;
 }

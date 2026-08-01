@@ -16,12 +16,10 @@
 		selectAll,
 		clearTargets,
 		allSelected,
-		sendToTargets,
-		multiHistory,
-		initMultiHistory,
-		removeHistory,
-		clearHistory
+		sendToTargets
 	} from '$lib/stores/multisend.svelte';
+	import { initSendHistory } from '$lib/stores/sendhistory.svelte';
+	import SendBox from '$lib/components/SendBox.svelte';
 	import { loadProfiles } from '$lib/stores/profiles.svelte';
 	import { i18n, initLocale, setLocale, t, type MessageKey } from '$lib/i18n.svelte';
 	import {
@@ -70,52 +68,6 @@
 		layoutState.maximizedPaneId ? paneById(layoutState.maximizedPaneId) : null
 	);
 
-	// --- Multi-send: type once, send to every checked tile ---
-	// The toolbar box is only a trigger: clicking it opens a panel holding a
-	// roomier input plus the history of what was sent before.
-	let multiText = $state('');
-	let multiInput = $state<HTMLInputElement | null>(null);
-	let panelInput = $state<HTMLInputElement | null>(null);
-	let historyOpen = $state(false);
-	let historyPanel = $state<HTMLElement | null>(null);
-	// Position while walking the history with the arrow keys; -1 means "editing a new line"
-	let historyIndex = $state(-1);
-
-	function openPanel() {
-		historyOpen = true;
-		// The panel input only exists once the panel has rendered
-		void Promise.resolve().then(() => panelInput?.focus());
-	}
-
-	function submitMulti() {
-		if (!multiText.trim() && multiSend.targets.size === 0) return;
-		sendToTargets(multiText);
-		multiText = '';
-		historyIndex = -1;
-	}
-
-	function onPanelKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') {
-			historyOpen = false;
-			return;
-		}
-		// Up/Down walk previously sent lines, like a shell prompt
-		if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-		const list = multiHistory.list;
-		if (list.length === 0) return;
-		e.preventDefault();
-		const next = e.key === 'ArrowUp' ? historyIndex + 1 : historyIndex - 1;
-		historyIndex = Math.min(Math.max(next, -1), list.length - 1);
-		multiText = historyIndex === -1 ? '' : list[historyIndex];
-	}
-
-	/** Clicking a history line loads it for editing; sending stays an explicit step */
-	function useHistory(line: string) {
-		multiText = line;
-		historyIndex = -1;
-		panelInput?.focus();
-	}
-
 	async function pickLogDir() {
 		const dir = await open({
 			directory: true,
@@ -159,7 +111,7 @@
 			initTheme();
 			initSettings();
 			loadProfiles();
-			initMultiHistory();
+			initSendHistory();
 		});
 
 		// Handle shortcuts in the capture phase before xterm consumes the keys
@@ -182,15 +134,12 @@
 		};
 		window.addEventListener('keydown', onKeydown, { capture: true });
 
-		// Close the pop-up panels when clicking outside of them
+		// Close the settings panel when clicking outside of it
 		const onPointerDown = (e: PointerEvent) => {
+			if (!settingsOpen) return;
 			const target = e.target as Node;
-			if (settingsOpen && !settingsPanel?.contains(target) && !settingsButton?.contains(target)) {
-				settingsOpen = false;
-			}
-			if (historyOpen && !historyPanel?.contains(target) && target !== multiInput) {
-				historyOpen = false;
-			}
+			if (settingsPanel?.contains(target) || settingsButton?.contains(target)) return;
+			settingsOpen = false;
 		};
 		window.addEventListener('pointerdown', onPointerDown);
 
@@ -223,66 +172,12 @@
 		<div class="spacer"></div>
 
 		<!-- Multi-send: input goes to every tile checked in its title bar -->
-		<form class="group multi-group" onsubmit={(e) => (e.preventDefault(), submitMulti())}>
-			<input
-				type="text"
-				class="multi-input"
+		<div class="group">
+			<SendBox
 				placeholder="{t('multi.placeholder')} ({multiSend.targets.size})"
-				spellcheck="false"
-				readonly
-				bind:this={multiInput}
-				value={multiText}
-				onfocus={openPanel}
-				onclick={openPanel}
-			/>
-			{#if historyOpen}
-				<div class="history-panel" bind:this={historyPanel}>
-					<input
-						type="text"
-						class="panel-input"
-						placeholder="{t('multi.placeholder')} ({multiSend.targets.size})"
-						spellcheck="false"
-						bind:this={panelInput}
-						bind:value={multiText}
-						onkeydown={onPanelKeydown}
-					/>
-					<span class="history-title">{t('multi.history')}</span>
-					{#if multiHistory.list.length === 0}
-						<p class="history-empty">{t('multi.historyEmpty')}</p>
-					{:else}
-						<ul>
-							{#each multiHistory.list as line (line)}
-								<li>
-									<button type="button" class="history-entry" onclick={() => useHistory(line)}>
-										{line}
-									</button>
-									<button
-										type="button"
-										class="history-del"
-										title={t('multi.historyRemove')}
-										onclick={() => removeHistory(line)}
-									>
-										✕
-									</button>
-								</li>
-							{/each}
-						</ul>
-						<div class="history-foot">
-							<button type="button" class="history-clear" onclick={clearHistory}>
-								{t('multi.historyClear')}
-							</button>
-						</div>
-					{/if}
-				</div>
-			{/if}
-			<button
-				type="submit"
-				class="multi-send"
-				title={t('multi.send')}
 				disabled={multiSend.targets.size === 0}
-			>
-				{t('multi.send')}
-			</button>
+				onsend={(text) => sendToTargets(text) > 0}
+			/>
 			<label class="multi-check" title={t('multi.all')}>
 				<input
 					type="checkbox"
@@ -291,7 +186,7 @@
 				/>
 				<span>{t('multi.all')}</span>
 			</label>
-		</form>
+		</div>
 
 		<!-- Add a tile on each side of the whole layout -->
 		<div class="group">
@@ -571,131 +466,6 @@
 		margin-right: 2px;
 		white-space: nowrap;
 	}
-	.multi-input {
-		width: 250px;
-		height: 28px;
-		box-sizing: border-box;
-		background: var(--bg-input);
-		color: var(--fg);
-		border: 1px solid var(--border);
-		border-radius: 5px;
-		padding: 0 8px;
-		font-size: 0.85rem;
-		outline: none;
-	}
-	.multi-input:focus {
-		border-color: var(--border-accent);
-	}
-	/* Read-only trigger: typing happens in the panel below */
-	.multi-input {
-		cursor: pointer;
-	}
-	/* Anchor for the history drop-down */
-	.multi-group {
-		position: relative;
-	}
-	.history-panel {
-		position: absolute;
-		top: calc(100% + 4px);
-		left: 0;
-		z-index: 50;
-		width: 460px;
-		padding: 0.5rem;
-		background: var(--bg-elev);
-		border: 1px solid var(--border-accent);
-		border-radius: 8px;
-		box-shadow: 0 8px 20px var(--shadow);
-	}
-	/* The real input: roomier than the toolbar box it replaces */
-	.panel-input {
-		width: 100%;
-		height: 40px;
-		box-sizing: border-box;
-		background: var(--bg-input);
-		color: var(--fg);
-		border: 1px solid var(--border-accent);
-		border-radius: 6px;
-		padding: 0 10px;
-		font-family: inherit;
-		font-size: 1rem;
-		outline: none;
-	}
-	.history-title {
-		display: block;
-		margin: 0.55rem 0 0.3rem;
-		padding-top: 0.45rem;
-		border-top: 1px solid var(--border);
-		font-size: 0.68rem;
-		font-weight: 600;
-		color: var(--fg-muted);
-	}
-	.history-empty {
-		margin: 0;
-		padding: 0.25rem;
-		font-size: 0.74rem;
-		color: var(--fg-faint);
-	}
-	.history-panel ul {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 3px;
-		max-height: 300px;
-		overflow-y: auto;
-	}
-	.history-panel li {
-		display: flex;
-		gap: 3px;
-		align-items: stretch;
-	}
-	/* Scoped under the panel so the toolbar's catch-all button rule does not win */
-	.history-panel .history-entry {
-		flex: 1;
-		min-width: 0;
-		padding: 0.28rem 0.5rem;
-		background: var(--bg-input);
-		border: 1px solid var(--border);
-		border-radius: 5px;
-		color: var(--fg);
-		font-family: inherit;
-		font-size: 0.78rem;
-		text-align: left;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		cursor: pointer;
-	}
-	.history-panel .history-entry:hover {
-		border-color: var(--border-accent);
-		background: var(--bg-input);
-		color: var(--fg);
-	}
-	.history-panel .history-del {
-		color: var(--fg-faint);
-		padding: 0 5px;
-		font-size: 0.78rem;
-	}
-	.history-panel .history-del:hover {
-		color: var(--danger);
-		background: var(--bg-input);
-	}
-	.history-foot {
-		display: flex;
-		justify-content: flex-end;
-		margin-top: 0.35rem;
-		padding-top: 0.35rem;
-		border-top: 1px solid var(--border);
-	}
-	.history-panel .history-clear {
-		font-size: 0.72rem;
-		color: var(--fg-muted);
-	}
-	.history-panel .history-clear:hover {
-		color: var(--danger);
-		background: none;
-	}
 	.multi-check {
 		display: flex;
 		align-items: center;
@@ -711,23 +481,6 @@
 	}
 	.multi-check:hover {
 		color: var(--accent);
-	}
-	.multi-send {
-		background: var(--primary);
-		color: var(--primary-fg);
-		border: 1px solid var(--primary);
-		border-radius: 5px;
-		padding: 3px 12px;
-		font-size: 0.8rem;
-		cursor: pointer;
-	}
-	.multi-send:hover:not(:disabled) {
-		background: var(--primary-hover);
-		border-color: var(--primary-hover);
-	}
-	.multi-send:disabled {
-		opacity: 0.45;
-		cursor: default;
 	}
 	/* Borderless controls sized like the tile title-bar buttons */
 	.toolbar button {

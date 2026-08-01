@@ -25,6 +25,7 @@
 	import { recordUse, type ProfileEntry } from '$lib/stores/profiles.svelte';
 	import { t, translateReason } from '$lib/i18n.svelte';
 	import TerminalView from './TerminalView.svelte';
+	import SendBox from './SendBox.svelte';
 	import ConnectForm from './ConnectForm.svelte';
 	import ProfileList from './ProfileList.svelte';
 	import HamsterWheel from './HamsterWheel.svelte';
@@ -139,6 +140,13 @@
 	function selectHistory(entry: ProfileEntry) {
 		// SSH tries key auth first; on failure connect() falls back to the prefilled form
 		void connect(entry.profile, null);
+	}
+
+	/** Tile send box: one line to this tile only. False keeps it out of the history. */
+	function sendLine(text: string): boolean {
+		if (!session || session.status !== 'connected') return false;
+		session.write(new TextEncoder().encode(`${text}\r`));
+		return true;
 	}
 
 	/** Serial only: tell a Linux target the terminal size by typing stty at its shell */
@@ -316,6 +324,18 @@
 			{session ? session.title : t('pane.empty')}
 		</span>
 		{#if session}
+			<!-- Send one line to this tile; the history is shared with the toolbar box.
+			     draggable=false keeps a click here from starting a tile drag, and the
+			     swallowed pointerdown keeps the terminal from grabbing focus back. -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div class="send-slot" draggable="false" onpointerdown={(e) => e.stopPropagation()}>
+				<SendBox
+					placeholder={t('send.placeholder')}
+					disabled={session.status !== 'connected'}
+					compact
+					onsend={sendLine}
+				/>
+			</div>
 			{#if session.profile.type === 'serial' && session.status === 'connected'}
 				<!-- Serial has no size protocol, so offer a manual stty to the target -->
 				<button type="button" class="tb" title={t('pane.sendSize')} onclick={sendStty}>
@@ -679,6 +699,14 @@
 		position: relative;
 		flex: 1;
 		min-height: 0;
+	}
+	/* Title-bar send box: gets the leftover width, but never crowds out the title */
+	.send-slot {
+		display: flex;
+		flex: 2 1 90px;
+		min-width: 0;
+		max-width: 280px;
+		cursor: default;
 	}
 	.overlay {
 		position: absolute;
