@@ -11,6 +11,7 @@ export interface PersistedSettings {
 	profiles?: unknown[];
 	last_by_type?: unknown;
 	last_type?: Profile['type'] | null;
+	multi_history?: string[];
 }
 
 let data: PersistedSettings = {};
