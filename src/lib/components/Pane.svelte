@@ -604,7 +604,7 @@
 	}
 	.title {
 		flex: 1;
-		font-size: 0.75rem;
+		font-size: 0.85rem;
 		/* Same tone as the title-bar icons */
 		color: var(--fg-icon);
 		overflow: hidden;
@@ -618,8 +618,8 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 24px;
-		height: 22px;
+		width: 30px;
+		height: 28px;
 		padding: 0;
 		background: none;
 		border: none;
@@ -637,8 +637,8 @@
 		color: var(--danger);
 	}
 	.tb :global(svg) {
-		width: 15px;
-		height: 15px;
+		width: 20px;
+		height: 20px;
 		fill: currentColor;
 		display: block;
 	}

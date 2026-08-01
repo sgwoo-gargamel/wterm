@@ -449,7 +449,7 @@
 	}
 	.logo {
 		font-weight: 700;
-		font-size: 0.9rem;
+		font-size: 1rem;
 		color: var(--accent);
 		margin-right: 8px;
 		outline: none;
@@ -476,7 +476,7 @@
 		border-radius: 6px;
 	}
 	.group-label {
-		font-size: 0.7rem;
+		font-size: 0.85rem;
 		/* Same tone as the icons so the whole group reads as one unit */
 		color: var(--fg-icon);
 		margin-right: 2px;
@@ -484,14 +484,14 @@
 	}
 	.multi-input {
 		width: 250px;
-		height: 26px;
+		height: 28px;
 		box-sizing: border-box;
 		background: var(--bg-input);
 		color: var(--fg);
 		border: 1px solid var(--border);
 		border-radius: 5px;
 		padding: 0 8px;
-		font-size: 0.78rem;
+		font-size: 0.85rem;
 		outline: none;
 	}
 	.multi-input:focus {
@@ -501,7 +501,7 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		font-size: 0.72rem;
+		font-size: 0.8rem;
 		color: var(--fg-icon);
 		cursor: pointer;
 		white-space: nowrap;
@@ -519,7 +519,7 @@
 		border: 1px solid var(--primary);
 		border-radius: 5px;
 		padding: 3px 12px;
-		font-size: 0.72rem;
+		font-size: 0.8rem;
 		cursor: pointer;
 	}
 	.multi-send:hover:not(:disabled) {
@@ -538,7 +538,7 @@
 		border: none;
 		border-radius: 4px;
 		padding: 2px 6px;
-		font-size: 0.78rem;
+		font-size: 0.85rem;
 		cursor: pointer;
 	}
 	.toolbar button:hover {
@@ -546,10 +546,10 @@
 		color: var(--accent);
 	}
 	.lang {
-		width: 24px;
-		height: 22px;
+		width: 30px;
+		height: 28px;
 		padding: 0;
-		font-size: 0.85rem;
+		font-size: 1rem;
 		font-weight: 600;
 		line-height: 1;
 		outline: none;
@@ -558,15 +558,15 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 24px;
+		width: 30px;
 	}
 	.icon-btn.configured {
 		color: var(--ok);
 	}
 	.icon-btn :global(svg) {
 		/* Same glyph size as the tile title-bar icons */
-		width: 15px;
-		height: 15px;
+		width: 20px;
+		height: 20px;
 		fill: currentColor;
 		display: block;
 	}
