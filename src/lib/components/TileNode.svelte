@@ -54,6 +54,7 @@
 		<div
 			class="divider {node.direction}"
 			onpointerdown={(e) => startDrag(e, node)}
+			ondblclick={() => (node.ratio = 0.5)}
 		></div>
 		<div class="child" style="flex-grow: {1 - node.ratio}">
 			<TileNode node={node.children[1]} />
