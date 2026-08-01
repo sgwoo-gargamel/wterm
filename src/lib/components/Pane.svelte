@@ -114,6 +114,15 @@
 		}
 	}
 
+	// A restored workspace hands the pane a connection to make; consume it once.
+	// SSH without a stored password lands on the prefilled form, as with history entries.
+	$effect(() => {
+		const target = pane.pending;
+		if (!target) return;
+		pane.pending = null;
+		void connect(target, null);
+	});
+
 	/** Click/Enter/Esc on the popup: cancel while connecting, dismiss once failed */
 	function dismissProgress() {
 		if (progress === 'connecting') {

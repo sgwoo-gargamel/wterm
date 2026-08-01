@@ -20,7 +20,16 @@
 		targetCount
 	} from '$lib/stores/multisend.svelte';
 	import { initSendHistory } from '$lib/stores/sendhistory.svelte';
+	import {
+		workspacesState,
+		initWorkspaces,
+		saveWorkspace,
+		loadWorkspace,
+		removeWorkspace,
+		setWorkspaceName
+	} from '$lib/stores/workspaces.svelte';
 	import SendBox from '$lib/components/SendBox.svelte';
+	import chevronDownIcon from '@fluentui/svg-icons/icons/chevron_down_20_regular.svg?raw';
 	import { loadProfiles } from '$lib/stores/profiles.svelte';
 	import { i18n, initLocale, setLocale, t, type MessageKey } from '$lib/i18n.svelte';
 	import {
@@ -82,6 +91,11 @@
 	let settingsPanel = $state<HTMLElement | null>(null);
 	let settingsButton = $state<HTMLElement | null>(null);
 
+	// --- Workspaces: the label names the current one, the caret opens the list ---
+	let workspaceOpen = $state(false);
+	let workspacePanel = $state<HTMLElement | null>(null);
+	let workspaceButton = $state<HTMLElement | null>(null);
+
 	// System monospace fonts, loaded from the backend when the panel opens
 	let fonts = $state<string[]>([]);
 	const currentFontName = $derived(
@@ -113,6 +127,7 @@
 			initSettings();
 			loadProfiles();
 			initSendHistory();
+			initWorkspaces();
 		});
 
 		// Handle shortcuts in the capture phase before xterm consumes the keys
@@ -135,12 +150,19 @@
 		};
 		window.addEventListener('keydown', onKeydown, { capture: true });
 
-		// Close the settings panel when clicking outside of it
+		// Close the pop-up panels when clicking outside of them
 		const onPointerDown = (e: PointerEvent) => {
-			if (!settingsOpen) return;
 			const target = e.target as Node;
-			if (settingsPanel?.contains(target) || settingsButton?.contains(target)) return;
-			settingsOpen = false;
+			if (settingsOpen && !settingsPanel?.contains(target) && !settingsButton?.contains(target)) {
+				settingsOpen = false;
+			}
+			if (
+				workspaceOpen &&
+				!workspacePanel?.contains(target) &&
+				!workspaceButton?.contains(target)
+			) {
+				workspaceOpen = false;
+			}
 		};
 		window.addEventListener('pointerdown', onPointerDown);
 
@@ -153,23 +175,82 @@
 
 <div class="app">
 	<header class="toolbar">
-		<!-- Editable label (not persisted) so the user can name the window ad hoc -->
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<span
-			class="logo"
-			role="textbox"
-			tabindex="0"
-			contenteditable="plaintext-only"
-			spellcheck="false"
-			onkeydown={(e) => {
-				if (e.key === 'Enter') {
-					e.preventDefault();
-					(e.currentTarget as HTMLElement).blur();
-				}
-			}}
-		>
-			wterm
-		</span>
+		<!-- The label is the current workspace name; the caret opens the saved list -->
+		<div class="workspace">
+			<!-- Keyed so loading a workspace refreshes the text the user can edit -->
+			{#key workspacesState.name}
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<span
+					class="logo"
+					role="textbox"
+					tabindex="0"
+					title={t('workspace.name')}
+					contenteditable="plaintext-only"
+					spellcheck="false"
+					onkeydown={(e) => {
+						if (e.key === 'Enter') {
+							e.preventDefault();
+							(e.currentTarget as HTMLElement).blur();
+						}
+					}}
+					onblur={(e) => setWorkspaceName(e.currentTarget.textContent ?? '')}
+				>{workspacesState.name}</span>
+			{/key}
+			<button
+				type="button"
+				class="lang icon-btn caret"
+				title={t('workspace.menu')}
+				bind:this={workspaceButton}
+				onclick={() => (workspaceOpen = !workspaceOpen)}
+			>
+				{@html chevronDownIcon}
+			</button>
+			{#if workspaceOpen}
+				<div class="workspace-panel" bind:this={workspacePanel}>
+					<button
+						type="button"
+						class="ws-save"
+						title={t('workspace.hint')}
+						onclick={() => {
+							saveWorkspace(workspacesState.name);
+							workspaceOpen = false;
+						}}
+					>
+						{t('workspace.save')}
+					</button>
+					<span class="panel-section">{t('workspace.saved')}</span>
+					{#if workspacesState.list.length === 0}
+						<p class="ws-empty">{t('workspace.empty')}</p>
+					{:else}
+						<ul class="ws-list">
+							{#each workspacesState.list as workspace (workspace.id)}
+								<li>
+									<button
+										type="button"
+										class="ws-entry"
+										class:current={workspace.name === workspacesState.name}
+										onclick={() => {
+											loadWorkspace(workspace.id);
+											workspaceOpen = false;
+										}}
+									>
+										{workspace.name}
+									</button>
+									<button
+										type="button"
+										class="ws-del"
+										title={t('workspace.remove')}
+										onclick={() => removeWorkspace(workspace.id)}
+									>
+										✕
+									</button>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</div>
+			{/if}
+		</div>
 		<div class="spacer"></div>
 
 		<!-- Multi-send: input goes to every tile checked in its title bar -->
@@ -434,13 +515,23 @@
 		border: none;
 		flex-shrink: 0;
 	}
+	/* Anchor for the workspace drop-down */
+	.workspace {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		margin-right: 8px;
+	}
 	.logo {
 		font-weight: 700;
 		font-size: 1rem;
 		color: var(--accent);
-		margin-right: 8px;
 		outline: none;
 		min-width: 40px;
+		max-width: 220px;
+		overflow: hidden;
+		white-space: nowrap;
 		padding: 2px 4px;
 		border-radius: 4px;
 		cursor: text;
@@ -448,6 +539,92 @@
 	.logo:focus {
 		background: var(--bg-input);
 		box-shadow: 0 0 0 1px var(--border-accent);
+	}
+	.caret :global(svg) {
+		width: 16px;
+		height: 16px;
+	}
+	.workspace-panel {
+		position: absolute;
+		top: calc(100% + 4px);
+		left: 0;
+		z-index: 50;
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+		width: 240px;
+		padding: 0.6rem;
+		background: var(--bg-elev);
+		border: 1px solid var(--border-accent);
+		border-radius: 8px;
+		box-shadow: 0 8px 20px var(--shadow);
+	}
+	.workspace-panel .ws-save {
+		padding: 0.3rem 0;
+		background: var(--primary);
+		color: var(--primary-fg);
+		border: 1px solid var(--primary);
+		border-radius: 5px;
+		font-size: 0.78rem;
+		cursor: pointer;
+	}
+	.workspace-panel .ws-save:hover {
+		background: var(--primary-hover);
+		border-color: var(--primary-hover);
+	}
+	.ws-empty {
+		margin: 0;
+		font-size: 0.74rem;
+		color: var(--fg-faint);
+	}
+	.ws-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+		max-height: 260px;
+		overflow-y: auto;
+	}
+	.ws-list li {
+		display: flex;
+		gap: 3px;
+		align-items: stretch;
+	}
+	.workspace-panel .ws-entry {
+		flex: 1;
+		min-width: 0;
+		padding: 0.28rem 0.5rem;
+		background: var(--bg-input);
+		border: 1px solid var(--border);
+		border-radius: 5px;
+		color: var(--fg);
+		font-size: 0.78rem;
+		text-align: left;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		cursor: pointer;
+	}
+	.workspace-panel .ws-entry:hover {
+		border-color: var(--border-accent);
+		background: var(--bg-input);
+		color: var(--fg);
+	}
+	/* The one whose name the label carries */
+	.workspace-panel .ws-entry.current {
+		color: var(--accent);
+		border-color: var(--border-accent);
+	}
+	.workspace-panel .ws-del {
+		color: var(--fg-faint);
+		padding: 0 5px;
+		font-size: 0.78rem;
+	}
+	.workspace-panel .ws-del:hover {
+		color: var(--danger);
+		background: var(--bg-input);
 	}
 	.spacer {
 		flex: 1;

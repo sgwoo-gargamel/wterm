@@ -1,9 +1,12 @@
+import type { Profile } from '$lib/ipc';
 import { closeSession } from './sessions.svelte';
 
 export interface PaneNode {
 	kind: 'pane';
 	id: string;
 	sessionId: string | null;
+	/** Connection a restored workspace wants this pane to open once it mounts */
+	pending?: Profile | null;
 }
 
 export interface SplitNode {
@@ -70,6 +73,28 @@ function removeNode(node: LayoutNode, paneId: string): LayoutNode | null {
 	const rb = removeNode(b, paneId);
 	if (rb === null) return a;
 	return { ...node, children: [ra, rb] };
+}
+
+/** Empty pane that connects to `pending` as soon as it is on screen */
+export function newPaneFor(pending: Profile | null): PaneNode {
+	return { kind: 'pane', id: `pane-${nextId++}`, sessionId: null, pending };
+}
+
+export function newSplitId(): string {
+	return `split-${nextId++}`;
+}
+
+function sessionIds(node: LayoutNode): string[] {
+	if (node.kind === 'pane') return node.sessionId ? [node.sessionId] : [];
+	return [...sessionIds(node.children[0]), ...sessionIds(node.children[1])];
+}
+
+/** Swap in a whole new layout, terminating every session the old one held */
+export function setLayout(root: LayoutNode) {
+	for (const id of sessionIds(layoutState.root)) closeSession(id);
+	layoutState.root = root;
+	layoutState.maximizedPaneId = null;
+	layoutState.activePaneId = firstPane(root).id;
 }
 
 export function activePane(): PaneNode | null {

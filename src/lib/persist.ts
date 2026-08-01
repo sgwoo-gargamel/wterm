@@ -12,6 +12,8 @@ export interface PersistedSettings {
 	last_by_type?: unknown;
 	last_type?: Profile['type'] | null;
 	multi_history?: string[];
+	workspaces?: unknown[];
+	workspace_name?: string;
 }
 
 let data: PersistedSettings = {};
