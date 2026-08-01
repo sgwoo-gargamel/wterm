@@ -450,6 +450,9 @@
 	.pane {
 		display: flex;
 		flex-direction: column;
+		/* Include the border in 100% size — otherwise the pane overflows its
+		   split cell by 2px and the divider paints over the bottom/right border */
+		box-sizing: border-box;
 		width: 100%;
 		height: 100%;
 		min-width: 0;
