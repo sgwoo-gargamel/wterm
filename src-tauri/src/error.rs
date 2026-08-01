@@ -20,6 +20,10 @@ pub enum Error {
     #[error("Local shell error: {0}")]
     Pty(String),
 
+    // Sentinel prefix the frontend detects to show a localized message
+    #[error("invalid-cwd:{0}")]
+    InvalidCwd(String),
+
     #[error("Session not found: {0}")]
     SessionNotFound(String),
 }

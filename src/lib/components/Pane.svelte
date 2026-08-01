@@ -80,10 +80,14 @@
 			await recordUse(profile);
 		} catch (e) {
 			if (attempt !== id) return;
-			error = String(e);
+			const raw = String(e);
+			// Backend sentinel for a missing/invalid local start directory
+			const badCwd = raw.startsWith('invalid-cwd:');
+			error = badCwd ? `${t('error.invalidCwd')}: ${raw.slice('invalid-cwd:'.length)}` : raw;
 			// The popup stays up on failure and waits for a click; a failure that beat
-			// the popup is reported inline by the form instead
-			if (progress === 'connecting') {
+			// the popup is reported inline by the form instead — except a bad start
+			// directory, which fails instantly but still deserves the popup
+			if (progress === 'connecting' || badCwd) {
 				progressError = error === 'password-required' ? t('error.passwordRequired') : error;
 				progress = 'failed';
 			}

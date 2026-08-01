@@ -64,6 +64,10 @@ pub fn spawn(
     // Explicit directory wins. Otherwise Windows shells start in the user's home,
     // while WSL is left alone so it opens in the distro's own home directory
     match cwd.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        // A bad directory would otherwise surface as a cryptic CreateProcess error
+        Some(dir) if !std::path::Path::new(dir).is_dir() => {
+            return Err(Error::InvalidCwd(dir.into()));
+        }
         Some(dir) => cmd.cwd(dir),
         None if !program.to_lowercase().contains("wsl") => {
             let home_var = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
