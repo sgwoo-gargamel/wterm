@@ -43,7 +43,7 @@ export function setSetting<K extends keyof PersistedSettings>(
 	}, 200);
 }
 
-/** Absolute path of the settings file (portable mode puts it next to the exe) */
+/** Absolute path of the settings file (next to the executable) */
 export function settingsLocation(): Promise<string> {
 	return invoke<string>('settings_location');
 }

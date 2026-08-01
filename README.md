@@ -41,14 +41,7 @@ Tauri 2 (Rust) + SvelteKit + xterm.js 로 만들어졌습니다.
 ## 설정 파일
 
 모든 설정(언어·테마·색상·폰트·로그 폴더·연결 이력)이 `wterm-settings.json` 한 파일에 저장됩니다.
-
-| 모드 | 저장 위치 |
-| --- | --- |
-| 기본 | `%APPDATA%\com.interconsystem.wterm\wterm-settings.json` |
-| 포터블 | 실행 파일과 같은 폴더 |
-
-실행 파일이 있는 폴더에 빈 **`portable.txt`** 파일을 만들면 포터블 모드로 동작합니다.
-USB 등에 넣어 설정과 함께 옮겨 쓸 때 사용하세요.
+저장 위치는 **실행 파일과 같은 폴더**이므로, 폴더째로 USB 등에 옮기면 설정도 함께 따라갑니다.
 
 ## 단축키
 
