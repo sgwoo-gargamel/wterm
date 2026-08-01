@@ -45,6 +45,10 @@
 	// --- Connection progress popup ---
 	/** A connection that answers this fast needs no popup; slower ones get the wheel */
 	const PROGRESS_DELAY = 400;
+	/** Once the popup is up, it stays at least this long so a success right after
+	    the delay reads as feedback instead of a flash */
+	const PROGRESS_MIN_VISIBLE = 450;
+	let progressShownAt = 0;
 	let progress = $state<'connecting' | 'failed' | null>(null);
 	let progressError = $state('');
 	let progressEl = $state<HTMLElement | null>(null);
@@ -65,10 +69,19 @@
 		// Backends block until the transport is up (a TCP connect to a dead host can
 		// take ~20s), so the popup is the only way out of a stuck attempt
 		const timer = setTimeout(() => {
-			if (attempt === id) progress = 'connecting';
+			if (attempt === id) {
+				progress = 'connecting';
+				progressShownAt = performance.now();
+			}
 		}, PROGRESS_DELAY);
 		try {
 			const s = await openSession(profile, password);
+			// Hold the popup up to its minimum before revealing the terminal;
+			// output arriving meanwhile is buffered by the session
+			if (attempt === id && progress === 'connecting') {
+				const left = PROGRESS_MIN_VISIBLE - (performance.now() - progressShownAt);
+				if (left > 0) await new Promise((resolve) => setTimeout(resolve, left));
+			}
 			if (attempt !== id) {
 				// Cancelled while connecting — the session arrived anyway, drop it
 				closeSession(s.id);
