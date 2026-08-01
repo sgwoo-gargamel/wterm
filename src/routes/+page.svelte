@@ -12,11 +12,12 @@
 	import folderIcon from '@fluentui/svg-icons/icons/folder_20_regular.svg?raw';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import {
-		multiSend,
 		selectAll,
 		clearTargets,
 		allSelected,
-		sendToTargets
+		sendToTargets,
+		connectedCount,
+		targetCount
 	} from '$lib/stores/multisend.svelte';
 	import { initSendHistory } from '$lib/stores/sendhistory.svelte';
 	import SendBox from '$lib/components/SendBox.svelte';
@@ -174,14 +175,16 @@
 		<!-- Multi-send: input goes to every tile checked in its title bar -->
 		<div class="group">
 			<SendBox
-				placeholder="{t('multi.placeholder')} ({multiSend.targets.size})"
-				disabled={multiSend.targets.size === 0}
+				placeholder="{t('multi.placeholder')} ({targetCount()})"
+				disabled={connectedCount() === 0}
+				sendDisabled={targetCount() === 0}
 				onsend={(text) => sendToTargets(text) > 0}
 			/>
 			<label class="multi-check" title={t('multi.all')}>
 				<input
 					type="checkbox"
 					checked={allSelected()}
+					disabled={connectedCount() === 0}
 					onchange={(e) => (e.currentTarget.checked ? selectAll() : clearTargets())}
 				/>
 				<span>{t('multi.all')}</span>

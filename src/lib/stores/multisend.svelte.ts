@@ -14,6 +14,16 @@ function connectedIds(): string[] {
 	return [...sessions.values()].filter((s) => s.status === 'connected').map((s) => s.id);
 }
 
+/** Sessions that could receive input at all — none means multi-send is pointless */
+export function connectedCount(): number {
+	return connectedIds().length;
+}
+
+/** Selected sessions that are still connected, i.e. what a send would actually reach */
+export function targetCount(): number {
+	return [...multiSend.targets].filter((id) => sessions.get(id)?.status === 'connected').length;
+}
+
 export function selectAll() {
 	for (const id of connectedIds()) multiSend.targets.add(id);
 }

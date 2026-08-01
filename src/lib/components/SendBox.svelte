@@ -10,11 +10,15 @@
 	let {
 		placeholder,
 		disabled = false,
+		sendDisabled = undefined,
 		compact = false,
 		onsend
 	}: {
 		placeholder: string;
+		/** Turns the whole box off: the trigger stops opening the panel */
 		disabled?: boolean;
+		/** Greys out just the Send button, e.g. when nothing is selected to receive */
+		sendDisabled?: boolean;
 		/**
 		 * Title-bar sizing: the trigger fills the space it is given and the panel
 		 * spans the nearest positioned ancestor (the tile title bar) instead of the box
@@ -30,15 +34,22 @@
 	let open = $state(false);
 	// Position while walking the history with the arrow keys; -1 means "editing a new line"
 	let historyIndex = $state(-1);
+	const noSend = $derived(sendDisabled ?? disabled);
+
+	// A box that goes dead while its panel is open takes the panel with it
+	$effect(() => {
+		if (disabled) open = false;
+	});
 
 	function openPanel() {
+		if (disabled) return;
 		open = true;
 		// The panel input only exists once the panel has rendered
 		void Promise.resolve().then(() => panelInput?.focus());
 	}
 
 	function submit() {
-		if (disabled) return;
+		if (noSend) return;
 		if (onsend(text)) recordSend(text);
 		text = '';
 		historyIndex = -1;
@@ -90,13 +101,14 @@
 		{placeholder}
 		spellcheck="false"
 		readonly
+		{disabled}
 		bind:this={trigger}
 		value={text}
 		onfocus={openPanel}
 		onclick={openPanel}
 	/>
 	{#if !compact}
-		<button type="button" class="send" title={t('multi.send')} {disabled} onclick={submit}>
+		<button type="button" class="send" title={t('multi.send')} disabled={noSend} onclick={submit}>
 			{t('multi.send')}
 		</button>
 	{/if}
@@ -112,7 +124,13 @@
 					bind:value={text}
 					onkeydown={onPanelKeydown}
 				/>
-				<button type="button" class="send" title={t('multi.send')} {disabled} onclick={submit}>
+				<button
+					type="button"
+					class="send"
+					title={t('multi.send')}
+					disabled={noSend}
+					onclick={submit}
+				>
 					{t('multi.send')}
 				</button>
 			</div>
@@ -170,6 +188,10 @@
 	}
 	.trigger:focus {
 		border-color: var(--border-accent);
+	}
+	.trigger:disabled {
+		opacity: 0.45;
+		cursor: default;
 	}
 	/* In a title bar the trigger takes the width it is given */
 	.compact {
