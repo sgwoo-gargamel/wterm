@@ -13,7 +13,6 @@ export interface PersistedSettings {
 	last_type?: Profile['type'] | null;
 	multi_history?: string[];
 	workspaces?: unknown[];
-	workspace_name?: string;
 }
 
 let data: PersistedSettings = {};

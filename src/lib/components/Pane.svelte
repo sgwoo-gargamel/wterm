@@ -329,7 +329,8 @@
 		ondragstart={onDragStart}
 		ondragend={onDragEnd}
 	>
-		<span class="title" class:muted={!session}>
+		<!-- With no session there is no send box, so the title pushes the buttons right -->
+		<span class="title" class:muted={!session} class:solo={!session}>
 			{session ? session.title : t('pane.empty')}
 		</span>
 		{#if session}
@@ -664,14 +665,20 @@
 	.title-bar:active {
 		cursor: grabbing;
 	}
+	/* Only as wide as its text, and capped so a long one never starves the send box */
 	.title {
-		flex: 1;
+		flex: 0 1 auto;
+		max-width: 40%;
 		font-size: 0.85rem;
 		/* Same tone as the title-bar icons */
 		color: var(--fg-icon);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.title.solo {
+		flex: 1 1 auto;
+		max-width: none;
 	}
 	.title.muted {
 		color: var(--fg-faint);
@@ -709,12 +716,13 @@
 		flex: 1;
 		min-height: 0;
 	}
-	/* Title-bar send box: gets the leftover width, but never crowds out the title */
+	/* Title-bar send box: takes every pixel the buttons and title leave behind */
 	.send-slot {
 		display: flex;
-		flex: 2 1 90px;
+		flex: 1 1 90px;
 		min-width: 0;
-		max-width: 280px;
+		/* Breathing room on both sides, on top of the title bar's own gap */
+		margin: 0 6px;
 		cursor: default;
 	}
 	.overlay {

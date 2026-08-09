@@ -47,17 +47,15 @@ export function initWorkspaces() {
 			(w) => w && typeof w.id === 'string' && typeof w.name === 'string' && isSavedNode(w.layout)
 		);
 	}
-	workspacesState.name = getSetting('workspace_name')?.trim() || DEFAULT_NAME;
 }
 
 function persist() {
 	setSetting('workspaces', $state.snapshot(workspacesState.list));
 }
 
-/** The label doubles as the current workspace name, so it is remembered too */
+/** The label doubles as the current workspace name; it starts over at each launch */
 export function setWorkspaceName(name: string) {
 	workspacesState.name = name.trim() || DEFAULT_NAME;
-	setSetting('workspace_name', workspacesState.name);
 }
 
 /** A pane keeps its connection even before it is up, so a mid-restore save is not lossy */

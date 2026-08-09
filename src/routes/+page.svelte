@@ -251,14 +251,14 @@
 				</div>
 			{/if}
 		</div>
-		<div class="spacer"></div>
-
-		<!-- Multi-send: input goes to every tile checked in its title bar -->
-		<div class="group">
+		<!-- Multi-send: input goes to every tile checked in its title bar.
+		     This group takes the toolbar's leftover width so the input is as wide as it gets -->
+		<div class="group grow">
 			<SendBox
 				placeholder="{t('multi.placeholder')} ({targetCount()})"
 				disabled={connectedCount() === 0}
 				sendDisabled={targetCount() === 0}
+				fill
 				onsend={(text) => sendToTargets(text) > 0}
 			/>
 			<label class="multi-check" title={t('multi.all')}>
@@ -626,9 +626,6 @@
 		color: var(--danger);
 		background: var(--bg-input);
 	}
-	.spacer {
-		flex: 1;
-	}
 	/* Toolbar groups: a caption plus that feature's controls, outlined together */
 	.group {
 		display: flex;
@@ -638,6 +635,13 @@
 		margin-left: 8px;
 		border: 1px solid var(--border);
 		border-radius: 6px;
+		flex-shrink: 0;
+	}
+	/* The one group that stretches; the rest keep their natural width */
+	.group.grow {
+		flex: 1;
+		min-width: 0;
+		margin-left: 0;
 	}
 	.group-label {
 		font-size: 0.85rem;
