@@ -12,36 +12,47 @@ pub struct PortInfo {
     pub in_use: bool,
 }
 
-#[tauri::command]
+/// `(async)` runs this on the thread pool. Enumeration probe-opens every port,
+/// which a busy driver can stall on — on the main thread that would hold up the
+/// whole IPC queue, leaving an in-flight `session_open` hanging forever.
+#[tauri::command(async)]
 pub fn list_serial_ports() -> Result<Vec<PortInfo>> {
     let ports = serialport::available_ports()?;
     Ok(ports
         .into_iter()
         .map(|p| {
-            // Probe-open to detect ports held by another app or one of our sessions
-            let in_use = serialport::new(&p.port_name, 9600)
-                .timeout(std::time::Duration::from_millis(50))
-                .open()
-                .is_err();
+            let bluetooth = matches!(&p.port_type, serialport::SerialPortType::BluetoothPort);
+            let kind = match p.port_type {
+                serialport::SerialPortType::UsbPort(info) => {
+                    info.product.unwrap_or_else(|| "USB".into())
+                }
+                serialport::SerialPortType::BluetoothPort => "Bluetooth".into(),
+                serialport::SerialPortType::PciPort => "PCI".into(),
+                serialport::SerialPortType::Unknown => String::new(),
+            };
+            // Probe-open to detect ports held by another app or one of our sessions.
+            // Never for Bluetooth: opening an outgoing SPP port makes Windows try to
+            // establish the link, which blocks for tens of seconds when the device is
+            // away — and "busy" says nothing useful about a port that is not paired up
+            // anyway. Those are reported free and left for the connect attempt to judge.
+            let in_use = !bluetooth
+                && serialport::new(&p.port_name, 9600)
+                    .timeout(std::time::Duration::from_millis(50))
+                    .open()
+                    .is_err();
             PortInfo {
                 name: p.port_name,
-                kind: match p.port_type {
-                    serialport::SerialPortType::UsbPort(info) => {
-                        info.product.unwrap_or_else(|| "USB".into())
-                    }
-                    serialport::SerialPortType::BluetoothPort => "Bluetooth".into(),
-                    serialport::SerialPortType::PciPort => "PCI".into(),
-                    serialport::SerialPortType::Unknown => String::new(),
-                },
+                kind,
                 in_use,
             }
         })
         .collect())
 }
 
-/// Enumerate installed fixed-pitch (monospace) font family names via GDI
+/// Enumerate installed fixed-pitch (monospace) font family names via GDI.
+/// Off the main thread — a full GDI enumeration is not instant.
 #[cfg(windows)]
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_fonts() -> Vec<String> {
     use std::collections::BTreeSet;
     use windows_sys::Win32::Foundation::LPARAM;
@@ -93,7 +104,7 @@ pub fn list_fonts() -> Vec<String> {
 }
 
 #[cfg(not(windows))]
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_fonts() -> Vec<String> {
     Vec::new()
 }
@@ -104,9 +115,11 @@ pub struct ShellInfo {
     pub command: String,
 }
 
-/// Installed WSL distributions (default first) plus the standard Windows shells
+/// Installed WSL distributions (default first) plus the standard Windows shells.
+/// Off the main thread: `wsl -l -q` shells out, and it can take seconds while a
+/// distro is already running — the main thread must stay free to pump IPC.
 #[cfg(windows)]
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_shells() -> Vec<ShellInfo> {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -148,7 +161,7 @@ pub fn list_shells() -> Vec<ShellInfo> {
 }
 
 #[cfg(not(windows))]
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_shells() -> Vec<ShellInfo> {
     vec![ShellInfo {
         label: "Shell".into(),
@@ -195,7 +208,8 @@ pub async fn session_close(state: State<'_, SessionManager>, id: String) -> Resu
 /// Start writing this session's output to `path` (created/truncated).
 /// `timestamps` prefixes every logged line with its arrival time;
 /// `plain` renders the visible text instead of writing raw escape sequences.
-#[tauri::command]
+/// Off the main thread — the log directory may be a slow or network path.
+#[tauri::command(async)]
 pub fn session_start_log(
     state: State<'_, SessionManager>,
     id: String,

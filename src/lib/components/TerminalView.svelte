@@ -104,7 +104,11 @@
 		width: 100%;
 		height: 100%;
 		background: var(--bg-panel);
-		padding: 4px 0 4px 6px;
+		/* Extra room at the bottom: the fit addon floors the row count against the
+		   content height, so the last row can end within a pixel or two of the box.
+		   Without the slack a block cursor on the last line touches the pane border
+		   and reads as clipped. Right stays 0 — that strip is xterm's scrollbar. */
+		padding: 4px 0 12px 4px;
 		box-sizing: border-box;
 		overflow: hidden;
 	}

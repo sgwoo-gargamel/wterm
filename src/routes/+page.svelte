@@ -644,7 +644,8 @@
 		margin-left: 0;
 	}
 	.group-label {
-		font-size: 0.85rem;
+		/* Same size as the tile title bar's "multi" caption so both toolbars read alike */
+		font-size: 0.7rem;
 		/* Same tone as the icons so the whole group reads as one unit */
 		color: var(--fg-icon);
 		margin-right: 2px;
@@ -654,7 +655,7 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		font-size: 0.8rem;
+		font-size: 0.7rem;
 		color: var(--fg-icon);
 		cursor: pointer;
 		white-space: nowrap;
@@ -719,8 +720,10 @@
 	.tiles {
 		flex: 1;
 		min-height: 0;
-		/* No top padding so the first tile sits directly under the toolbar */
-		padding: 0 6px 6px;
+		/* No top padding so the first tile sits directly under the toolbar. The gap to
+		   the window edge stays tighter than the tile's own inner padding, so the
+		   terminal content reads as inset from its tile rather than the tile from the app */
+		padding: 0 2px 2px;
 		display: flex;
 	}
 	.toolbar {

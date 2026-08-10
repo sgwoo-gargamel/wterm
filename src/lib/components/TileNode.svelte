@@ -44,7 +44,16 @@
 </script>
 
 {#if node.kind === 'pane'}
-	<Pane pane={node} />
+	<!--
+		Keyed by pane id. Children here are matched by position, so restructuring the
+		tree (adding a tile wraps the whole root in a new split) hands one pane's Pane
+		instance to a different pane. That instance keeps its own state — the connect
+		attempt counter, busy/error, open menus — and its `session` derived stops
+		tracking the new pane, so a successful connect never reaches the view.
+	-->
+	{#key node.id}
+		<Pane pane={node} />
+	{/key}
 {:else}
 	<div class="split {node.direction}" bind:this={container}>
 		<div class="child" style="flex-grow: {node.ratio}">

@@ -202,7 +202,8 @@
 		border-radius: 5px;
 		padding: 0 8px;
 		font-family: inherit;
-		font-size: 0.85rem;
+		/* One text size for both placements — the compact variant only changes the box */
+		font-size: 0.78rem;
 		outline: none;
 	}
 	.field:focus {
@@ -228,7 +229,6 @@
 	.compact .field {
 		width: 100%;
 		height: 22px;
-		font-size: 0.78rem;
 		padding: 0 6px;
 	}
 	.send {
@@ -240,7 +240,8 @@
 		border: 1px solid var(--primary);
 		border-radius: 5px;
 		padding: 3px 12px;
-		font-size: 0.8rem;
+		/* Toolbar caption scale — this button only ever shows next to them */
+		font-size: 0.7rem;
 		cursor: pointer;
 	}
 	.send:hover:not(:disabled) {
