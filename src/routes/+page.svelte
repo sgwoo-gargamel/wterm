@@ -41,6 +41,7 @@
 		type ColorKey
 	} from '$lib/stores/theme.svelte';
 	import { XTERM_THEMES } from '$lib/terminals';
+	import { saveStatus, clearSaveFailure } from '$lib/stores/savestatus.svelte';
 
 	// Colour pickers show the effective value, so unset fields start from the built-in theme
 	const COLOR_FIELDS: { key: ColorKey; label: MessageKey; fallback: () => string }[] = [
@@ -412,7 +413,88 @@
 	</main>
 </div>
 
+{#if saveStatus.failed}
+	<div
+		class="save-backdrop"
+		role="alertdialog"
+		aria-modal="true"
+		aria-labelledby="save-error-title"
+		tabindex="-1"
+		onkeydown={(e) => {
+			if (e.key === 'Escape') clearSaveFailure();
+		}}
+	>
+		<div class="save-popup">
+			<strong id="save-error-title">{t('save.failed')}</strong>
+			<p>{t('save.failedHint')}</p>
+			{#if saveStatus.path}<code>{saveStatus.path}</code>{/if}
+			{#if saveStatus.detail}<p class="detail">{saveStatus.detail}</p>{/if}
+			<!-- Autofocused so Enter and Escape both dismiss without reaching for the mouse -->
+			<!-- svelte-ignore a11y_autofocus -->
+			<button type="button" autofocus onclick={clearSaveFailure}>{t('save.dismiss')}</button>
+		</div>
+	</div>
+{/if}
+
 <style>
+	.save-backdrop {
+		position: fixed;
+		inset: 0;
+		/* Above every in-app layer, including the colour picker at 60 */
+		z-index: 100;
+		background: var(--overlay);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.save-popup {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		max-width: 30rem;
+		padding: 1.2rem 1.4rem;
+		background: var(--bg-panel);
+		border: 1px solid var(--danger-border);
+		border-radius: 8px;
+		box-shadow: 0 12px 32px rgb(0 0 0 / 45%);
+		color: var(--fg);
+		font-size: 0.85rem;
+	}
+	.save-popup strong {
+		color: var(--danger);
+		font-size: 0.95rem;
+	}
+	.save-popup p {
+		margin: 0;
+	}
+	.save-popup code {
+		padding: 0.35rem 0.5rem;
+		background: var(--bg-input);
+		border-radius: 4px;
+		font-size: 0.78rem;
+		color: var(--fg-muted);
+		word-break: break-all;
+	}
+	.save-popup .detail {
+		font-size: 0.78rem;
+		color: var(--fg-faint);
+		word-break: break-all;
+	}
+	.save-popup button {
+		align-self: flex-end;
+		margin-top: 0.3rem;
+		padding: 0.35rem 1rem;
+		background: var(--accent-soft);
+		border: 1px solid var(--border-accent);
+		border-radius: 6px;
+		color: var(--fg);
+		font-size: 0.85rem;
+		cursor: pointer;
+	}
+	.save-popup button:hover {
+		background: var(--accent-soft-hover);
+	}
+
 	:global(:root) {
 		/* Native controls (number spinners, select popups, scrollbars) follow the theme */
 		color-scheme: dark;
