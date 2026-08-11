@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { open } from '@tauri-apps/plugin-dialog';
-	import { listShells, type Profile, type ShellInfo } from '$lib/ipc';
+	import { type Profile } from '$lib/ipc';
 	import { lastState, profilesState } from '$lib/stores/profiles.svelte';
 	import { portsState, refreshPorts } from '$lib/stores/ports.svelte';
+	import { shellsState, loadShells } from '$lib/stores/shells.svelte';
 	import { t } from '$lib/i18n.svelte';
 
 	let {
@@ -19,14 +20,16 @@
 	type Kind = 'serial' | 'ssh' | 'telnet' | 'local';
 	let kind = $state<Kind>('serial');
 
-	// Local shells (WSL distros, PowerShell, cmd) — loaded on first use
-	let shells = $state<ShellInfo[]>([]);
 	let shellCommand = $state('');
 	let shellCwd = $state('');
 	const isWsl = $derived(/wsl/i.test(shellCommand));
+	// Until the user picks, the selection follows the top of the list, so WSL
+	// distributions arriving after the built-in shells still become the default
+	let shellPicked = $state(false);
 
 	/** Switching shells restores the start directory last used with THAT shell */
 	function selectShell(command: string) {
+		shellPicked = true;
 		shellCommand = command;
 		const previous = profilesState.list.find(
 			(e) => e.profile.type === 'local' && e.profile.command === command
@@ -44,15 +47,10 @@
 		if (typeof dir === 'string') shellCwd = dir;
 	}
 
-	async function loadShells() {
-		if (shells.length > 0) return;
-		try {
-			shells = await listShells();
-			if (!shellCommand && shells.length > 0) shellCommand = shells[0].command;
-		} catch {
-			shells = [];
-		}
-	}
+	$effect(() => {
+		const first = shellsState.list[0];
+		if (!shellPicked && first) shellCommand = first.command;
+	});
 
 	// serial
 	let port = $state('');
@@ -98,6 +96,8 @@
 	function applyPrefill(p: Profile) {
 		kind = p.type;
 		if (p.type === 'local') {
+			// A saved profile names its shell, so the list must not override it
+			shellPicked = true;
 			shellCommand = p.command;
 			shellCwd = p.cwd ?? '';
 			void loadShells();
@@ -288,10 +288,10 @@
 				value={shellCommand}
 				onchange={(e) => selectShell(e.currentTarget.value)}
 			>
-				{#if shells.length === 0}
+				{#if shellsState.list.length === 0}
 					<option value="" disabled>{t('form.noDistros')}</option>
 				{/if}
-				{#each shells as s (s.command)}
+				{#each shellsState.list as s (s.command)}
 					<option value={s.command}>{s.label}</option>
 				{/each}
 			</select>

@@ -1,4 +1,5 @@
 import { invoke, Channel } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 // Maps 1:1 to the Rust Profile enum (serde tag = "type")
 export type SerialProfile = { type: 'serial'; port: string; baud_rate: number };
@@ -12,9 +13,17 @@ export interface ShellInfo {
 	command: string;
 }
 
-/** Installed WSL distributions plus standard shells */
+/**
+ * Shells that always exist, returned immediately. WSL is enumerated in the
+ * background and delivered through {@link onWslShells}.
+ */
 export function listShells(): Promise<ShellInfo[]> {
 	return invoke<ShellInfo[]>('list_shells');
+}
+
+/** Installed WSL distributions, once the backend has finished looking */
+export function onWslShells(handler: (shells: ShellInfo[]) => void): Promise<UnlistenFn> {
+	return listen<ShellInfo[]>('wsl-shells', (ev) => handler(ev.payload));
 }
 
 export type OutputEvent =
