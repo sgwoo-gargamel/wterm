@@ -26,7 +26,9 @@
 		saveWorkspace,
 		loadWorkspace,
 		removeWorkspace,
-		setWorkspaceName
+		setWorkspaceName,
+		isPlaceholderName,
+		newWorkspace
 	} from '$lib/stores/workspaces.svelte';
 	import SendBox from '$lib/components/SendBox.svelte';
 	import chevronDownIcon from '@fluentui/svg-icons/icons/chevron_down_20_regular.svg?raw';
@@ -211,7 +213,10 @@
 					<button
 						type="button"
 						class="ws-save"
-						title={t('workspace.hint')}
+						disabled={isPlaceholderName(workspacesState.name)}
+						title={isPlaceholderName(workspacesState.name)
+							? t('workspace.needName')
+							: t('workspace.hint')}
 						onclick={() => {
 							saveWorkspace(workspacesState.name);
 							workspaceOpen = false;
@@ -219,6 +224,21 @@
 					>
 						{t('workspace.save')}
 					</button>
+					<!-- The way back to a launch-fresh tile, and out of a workspace -->
+					<button
+						type="button"
+						class="ws-new"
+						title={t('workspace.newHint')}
+						onclick={() => {
+							newWorkspace();
+							workspaceOpen = false;
+						}}
+					>
+						{t('workspace.new')}
+					</button>
+					{#if isPlaceholderName(workspacesState.name)}
+						<p class="ws-need-name">{t('workspace.needName')}</p>
+					{/if}
 					<span class="panel-section">{t('workspace.saved')}</span>
 					{#if workspacesState.list.length === 0}
 						<p class="ws-empty">{t('workspace.empty')}</p>
@@ -650,9 +670,32 @@
 		font-size: 0.78rem;
 		cursor: pointer;
 	}
-	.workspace-panel .ws-save:hover {
+	.workspace-panel .ws-save:hover:not(:disabled) {
 		background: var(--primary-hover);
 		border-color: var(--primary-hover);
+	}
+	.workspace-panel .ws-save:disabled {
+		opacity: 0.45;
+		cursor: default;
+	}
+	.workspace-panel .ws-new {
+		margin-top: 4px;
+		padding: 0.3rem 0;
+		background: transparent;
+		color: var(--fg);
+		border: 1px solid var(--border);
+		border-radius: 5px;
+		font-size: 0.78rem;
+		cursor: pointer;
+	}
+	.workspace-panel .ws-new:hover {
+		border-color: var(--border-accent);
+		background: var(--bg-input);
+	}
+	.ws-need-name {
+		margin: 0.35rem 0 0;
+		font-size: 0.7rem;
+		color: var(--fg-faint);
 	}
 	.ws-empty {
 		margin: 0;

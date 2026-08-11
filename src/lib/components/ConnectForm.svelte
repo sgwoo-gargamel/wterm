@@ -185,6 +185,15 @@
 		}
 	});
 
+	// Deleting the history entry that put an absent port here should clear the
+	// field now, not only on the next launch. Narrow on purpose: the port must be
+	// unusable AND no longer the stored prefill, which only a deletion produces.
+	$effect(() => {
+		if (kind !== 'serial' || !port || !portIssue) return;
+		if (lastState.byType.serial?.port === port) return;
+		port = '';
+	});
+
 	// Safety net: if the bound port ever ends up empty while devices exist
 	// (e.g. a select binding reset when the option list changes), pick the first one
 	$effect(() => {

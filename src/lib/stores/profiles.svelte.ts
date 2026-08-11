@@ -94,9 +94,30 @@ export function recordUse(profile: Profile) {
 	setSetting('last_type', lastState.lastType);
 }
 
+/**
+ * Drop a connection from the per-type prefill. Without this, deleting a history
+ * entry leaves `last_by_type` holding it and the next launch fills the form with
+ * the connection the user just erased — with no way left to reach it.
+ */
+function forgetLast(profile: Profile) {
+	const kind = profile.type;
+	const last = lastState.byType[kind];
+	if (!last || profileKey(last) !== profileKey(profile)) return;
+
+	const byType = { ...$state.snapshot(lastState.byType) } as LastByType;
+	delete byType[kind];
+	lastState.byType = byType;
+	if (lastState.lastType === kind) lastState.lastType = null;
+
+	setSetting('last_by_type', $state.snapshot(lastState.byType));
+	setSetting('last_type', lastState.lastType);
+}
+
 export function removeProfile(id: string) {
+	const entry = profilesState.list.find((e) => e.id === id);
 	profilesState.list = profilesState.list.filter((e) => e.id !== id);
 	persist();
+	if (entry) forgetLast(entry.profile);
 }
 
 export async function renameProfile(id: string, name: string) {

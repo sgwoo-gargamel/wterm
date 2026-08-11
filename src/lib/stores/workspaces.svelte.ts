@@ -84,9 +84,20 @@ function build(node: SavedNode): LayoutNode {
 	};
 }
 
+/**
+ * `wterm` is the placeholder every launch starts with, not a name anyone chose.
+ * Saving under it would pile unrelated layouts onto one entry and leave the list
+ * headed by a workspace the user never meant to create.
+ */
+export function isPlaceholderName(name: string): boolean {
+	const trimmed = name.trim();
+	return trimmed === '' || trimmed.toLowerCase() === DEFAULT_NAME;
+}
+
 /** Store the current layout under `name`, replacing a workspace of the same name */
 export function saveWorkspace(name: string) {
-	const trimmed = name.trim() || DEFAULT_NAME;
+	if (isPlaceholderName(name)) return;
+	const trimmed = name.trim();
 	const layout = capture(layoutState.root);
 	const existing = workspacesState.list.find((w) => w.name === trimmed);
 	if (existing) existing.layout = layout;
@@ -103,7 +114,21 @@ export function loadWorkspace(id: string) {
 	setWorkspaceName(workspace.name);
 }
 
+/**
+ * Back to a launch-fresh state: one empty tile under the placeholder name. The
+ * way out of a workspace — without it, deleting the one you are in leaves the
+ * label naming something that no longer exists and no route back.
+ */
+export function newWorkspace() {
+	setLayout(newPaneFor(null));
+	setWorkspaceName(DEFAULT_NAME);
+}
+
 export function removeWorkspace(id: string) {
+	const removed = workspacesState.list.find((w) => w.id === id);
 	workspacesState.list = workspacesState.list.filter((w) => w.id !== id);
 	persist();
+	// Deleting the workspace currently open drops its name too; the layout stays,
+	// so nothing on screen is lost, but it is no longer a saved workspace
+	if (removed && removed.name === workspacesState.name) setWorkspaceName(DEFAULT_NAME);
 }
