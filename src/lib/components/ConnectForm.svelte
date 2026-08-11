@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { open } from '@tauri-apps/plugin-dialog';
+	import HamsterWheel from './HamsterWheel.svelte';
 	import { type Profile } from '$lib/ipc';
 	import { lastState, profilesState } from '$lib/stores/profiles.svelte';
 	import { portsState, refreshPorts } from '$lib/stores/ports.svelte';
 	import { shellsState, loadShells } from '$lib/stores/shells.svelte';
-	import { t } from '$lib/i18n.svelte';
+	import { t, type MessageKey } from '$lib/i18n.svelte';
 
 	let {
 		prefill = null,
@@ -20,11 +21,20 @@
 	type Kind = 'serial' | 'ssh' | 'telnet' | 'local';
 	let kind = $state<Kind>('serial');
 
+	// The warm-up holds for a beat even when the lists come back at once —
+	// a spinner that vanishes on sight reads as a glitch rather than progress.
+	const WARMUP_MIN_MS = 700;
+	/** Ceiling on the warm-up, so a stalled probe still gives up the form */
+	const WARMUP_CAP_MS = 1500;
+	/** How long the finished card stays up before handing over to the form */
+	const WARMUP_DONE_MS = 500;
+
 	let shellCommand = $state('');
 	let shellCwd = $state('');
 	const isWsl = $derived(/wsl/i.test(shellCommand));
-	// Until the user picks, the selection follows the top of the list, so WSL
-	// distributions arriving after the built-in shells still become the default
+	// The selection is made once, from whichever shells arrived first, and then
+	// left alone. Following the list instead would re-select when the WSL entries
+	// land a moment later, and the visible jump reads as a flicker.
 	let shellPicked = $state(false);
 
 	/** Switching shells restores the start directory last used with THAT shell */
@@ -47,9 +57,16 @@
 		if (typeof dir === 'string') shellCwd = dir;
 	}
 
+	// Plain flag, not state: writing state this effect reads would re-run it
+	let shellDefaulted = false;
 	$effect(() => {
+		// Waiting for the probe keeps the WSL distribution as the default —
+		// picking from a half-filled list would settle on PowerShell instead
+		if (shellDefaulted || shellPicked || !shellsState.settled) return;
 		const first = shellsState.list[0];
-		if (!shellPicked && first) shellCommand = first.command;
+		if (!first) return;
+		shellDefaulted = true;
+		shellCommand = first.command;
 	});
 
 	// serial
@@ -111,9 +128,39 @@
 		}
 	}
 
+	/**
+	 * Devices come and go between runs, so every launch scans afresh and the
+	 * warm-up always covers it. A form opened later in the session has nothing
+	 * to wait for — the lists were gathered at startup — and skips it outright.
+	 */
+	const listsPending = !(portsState.loaded && shellsState.settled);
+	let warmedUp = $state(!listsPending);
+	let minShown = $state(false);
+	let scanDone = $state(false);
+	$effect(() => {
+		if (listsPending && minShown && portsState.loaded && shellsState.settled) scanDone = true;
+	});
+
+	// The wheel stops and the card says so before it goes, so the overlay is not
+	// yanked away mid-spin
+	$effect(() => {
+		if (!scanDone) return;
+		const done = setTimeout(() => (warmedUp = true), WARMUP_DONE_MS);
+		return () => clearTimeout(done);
+	});
+
 	onMount(() => {
 		void refreshAndDefault();
-		if (kind === 'local') void loadShells();
+		// Both lists are needed up front: the warm-up waits on either one
+		void loadShells();
+		const min = setTimeout(() => (minShown = true), WARMUP_MIN_MS);
+		// Routed through the same completion beat, so even a timed-out scan ends
+		// the same way instead of blinking out
+		const cap = setTimeout(() => (scanDone = true), WARMUP_CAP_MS);
+		return () => {
+			clearTimeout(min);
+			clearTimeout(cap);
+		};
 	});
 
 	$effect(() => {
@@ -146,10 +193,22 @@
 		}
 	});
 
+	/**
+	 * Why the selected port cannot be opened, or null when it can. Silent until
+	 * enumeration has run — before that an absent port only means "not yet known".
+	 */
+	const portIssue = $derived.by((): MessageKey | null => {
+		if (kind !== 'serial' || !port || !portsState.loaded) return null;
+		const found = portsState.list.find((p) => p.name === port);
+		if (!found) return 'form.portMissing';
+		return found.in_use ? 'form.portBusy' : null;
+	});
+
 	const canSubmit = $derived.by(() => {
 		if (busy) return false;
 		if (kind === 'local') return shellCommand.trim() !== '';
-		if (kind === 'serial') return port.trim() !== '' && !!baudRate && baudRate > 0;
+		// Connecting to an unplugged or busy port only fails later, with a popup
+		if (kind === 'serial') return port.trim() !== '' && !!baudRate && baudRate > 0 && !portIssue;
 		if (kind === 'ssh') return host.trim() !== '' && netPort > 0 && username.trim() !== '';
 		return host.trim() !== '' && netPort > 0;
 	});
@@ -194,7 +253,18 @@
 	}}
 />
 
-<form class="connect-form" onsubmit={submit}>
+{#if !warmedUp}
+	<!-- Absolute against Pane's .empty-wrap, so it centres over the whole tile
+	     exactly like the connecting card rather than sitting in the form column -->
+	<div class="warmup-overlay">
+		<div class="warmup-card">
+			<HamsterWheel running={!scanDone} size="9px" />
+			<p>{scanDone ? t('form.scanDone') : t('form.scanning')}</p>
+		</div>
+	</div>
+{/if}
+	<!-- Kept in the layout while hidden, so nothing shifts when it takes over -->
+	<form class="connect-form" class:warming={!warmedUp} onsubmit={submit}>
 	<div class="tabs" role="tablist">
 		{#each [['serial', t('tab.serial')], ['ssh', 'SSH'], ['telnet', 'Telnet'], ['local', t('tab.local')]] as [k, label] (k)}
 			<button
@@ -214,12 +284,18 @@
 			<span>{t('form.port')}</span>
 			<span class="row">
 				<select bind:value={port}>
-					{#if portsState.list.length === 0 && !port}
+					<!-- Enumeration probe-opens every port, so the list lands late. Until
+					     it does, say so rather than claiming there are none. -->
+					{#if !port && !portsState.loaded}
+						<option value="" disabled>{t('form.loadingPorts')}</option>
+					{:else if !port && portsState.list.length === 0}
 						<option value="" disabled>{t('form.noPorts')}</option>
 					{/if}
 					{#if port && !portsState.list.some((p) => p.name === port)}
-						<!-- Saved port not in the current enumeration (unplugged) — shown grayed -->
-						<option value={port} disabled>{port}</option>
+						<!-- A saved port keeps its own entry so the binding never loses its
+						     match and resets. Grayed as unplugged only once enumeration has
+						     actually run and come back without it. -->
+						<option value={port} disabled={portsState.loaded}>{port}</option>
 					{/if}
 					{#each portsState.list as p (p.name)}
 						<option value={p.name} disabled={p.in_use}>
@@ -237,6 +313,10 @@
 				</button>
 			</span>
 		</label>
+		<!-- Says why the connect button is off; ↻ is right there to retry after replugging -->
+		{#if portIssue}
+			<p class="port-issue">{t(portIssue)}</p>
+		{/if}
 		<label>
 			<span>{t('form.baudRate')}</span>
 			<div class="baud-combo" bind:this={baudCombo}>
@@ -354,7 +434,7 @@
 	<button type="submit" class="primary" disabled={!canSubmit}>
 		{busy ? t('form.connecting') : t('form.connect')}
 	</button>
-</form>
+	</form>
 
 <style>
 	.connect-form {
@@ -363,6 +443,44 @@
 		gap: 0.5rem;
 		/* Fixed width so switching tabs never shifts the layout */
 		width: 270px;
+	}
+	.connect-form.warming {
+		visibility: hidden;
+	}
+	.port-issue {
+		margin: -0.2rem 0 0;
+		color: var(--danger);
+		font-size: 0.78rem;
+	}
+	/* Mirrors .progress-overlay / .progress-card in Pane so both indicators read
+	   as the same thing; not interactive, since there is nothing to cancel */
+	.warmup-overlay {
+		position: absolute;
+		inset: 0;
+		z-index: 25;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--overlay);
+		overflow: hidden;
+	}
+	.warmup-card {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.9rem;
+		min-width: 280px;
+		max-width: min(420px, 92%);
+		padding: 2rem 2.6rem;
+		background: var(--bg-elev);
+		border: 1px solid var(--border-accent);
+		border-radius: 14px;
+		box-shadow: 0 10px 28px var(--shadow);
+	}
+	.warmup-card p {
+		margin: 0;
+		font-size: 1.05rem;
+		color: var(--fg);
 	}
 	.ghost {
 		visibility: hidden;

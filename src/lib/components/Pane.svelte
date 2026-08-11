@@ -23,6 +23,7 @@
 	import dismissIcon from '@fluentui/svg-icons/icons/dismiss_20_regular.svg?raw';
 	import { closeSession, openSession, sessions } from '$lib/stores/sessions.svelte';
 	import { recordUse, type ProfileEntry } from '$lib/stores/profiles.svelte';
+	import { portsState, portUnavailable, refreshPorts } from '$lib/stores/ports.svelte';
 	import { t, translateReason } from '$lib/i18n.svelte';
 	import TerminalView from './TerminalView.svelte';
 	import SendBox from './SendBox.svelte';
@@ -119,6 +120,21 @@
 	$effect(() => {
 		const target = pane.pending;
 		if (!target) return;
+		if (target.type === 'serial') {
+			// The device may be gone since the workspace was saved. Judging that
+			// needs the enumeration, so wait for it rather than guessing.
+			if (!portsState.loaded) {
+				void refreshPorts();
+				return;
+			}
+			if (portUnavailable(target.port)) {
+				// Opening it would only fail — hand the pane back as a connect form
+				// with the saved settings filled in, ready to retry after replugging
+				pane.pending = null;
+				prefill = { ...target };
+				return;
+			}
+		}
 		pane.pending = null;
 		void connect(target, null);
 	});
