@@ -14,7 +14,8 @@
         "title": "wterm",
         "width": 1280,
         "height": 900,
-        "dragDropEnabled": false
+        "dragDropEnabled": false,
+        "additionalBrowserArgs": "--disable-background-timer-throttling --disable-renderer-backgrounding --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,IntensiveWakeUpThrottling"
       }
     ],
     "security": {
