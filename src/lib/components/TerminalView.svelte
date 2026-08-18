@@ -5,7 +5,7 @@
 	import '@xterm/xterm/css/xterm.css';
 	import type { Session } from '$lib/stores/sessions.svelte';
 	import { themeState } from '$lib/stores/theme.svelte';
-	import { settingsState } from '$lib/stores/settings.svelte';
+	import { settingsState, setFont } from '$lib/stores/settings.svelte';
 	import { getTerminal, attachToContainer, xtermTheme } from '$lib/terminals';
 
 	let {
@@ -53,11 +53,23 @@
 		ro.observe(container);
 		term.focus();
 
+		// Ctrl+wheel zooms the font. Capture phase so xterm's viewport never sees
+		// the event (it would scroll the buffer), and non-passive because Svelte's
+		// onwheel attribute is passive and couldn't block WebView2's page zoom.
+		const onWheel = (e: WheelEvent) => {
+			if (!e.ctrlKey) return;
+			e.preventDefault();
+			e.stopPropagation();
+			setFont({ size: settingsState.font.size + (e.deltaY < 0 ? 1 : -1) });
+		};
+		container.addEventListener('wheel', onWheel, { capture: true, passive: false });
+
 		return () => {
 			// Do NOT dispose here — the terminal outlives the view (disposed on session close).
 			// Nothing in this teardown may throw: it runs inside Svelte's flush.
 			try {
 				ro.disconnect();
+				container.removeEventListener('wheel', onWheel, { capture: true });
 				session.detach(sink);
 				clearTimeout(resizeTimer);
 			} catch (e) {
