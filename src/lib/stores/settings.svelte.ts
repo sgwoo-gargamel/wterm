@@ -14,8 +14,16 @@ export const DEFAULT_FONT: FontSettings = {
 
 const VALID_WEIGHTS = [300, 400, 500, 700];
 
-export const settingsState = $state<{ font: FontSettings; logDir: string }>({
+/** webgl = fast (grayscale AA), dom = ClearType-sharp but slow on heavy output */
+export type RendererKind = 'webgl' | 'dom';
+
+export const settingsState = $state<{
+	font: FontSettings;
+	renderer: RendererKind;
+	logDir: string;
+}>({
 	font: { ...DEFAULT_FONT },
+	renderer: 'webgl',
 	logDir: ''
 });
 
@@ -26,6 +34,8 @@ export function setLogDir(dir: string) {
 
 export function initSettings() {
 	settingsState.logDir = getSetting('logDir') ?? '';
+	const renderer = getSetting('renderer');
+	if (renderer === 'webgl' || renderer === 'dom') settingsState.renderer = renderer;
 	const saved = getSetting('font') as Partial<FontSettings> | undefined;
 	if (!saved) return;
 	if (typeof saved.family === 'string' && saved.family.trim()) {
@@ -50,6 +60,11 @@ export function setFont(partial: Partial<FontSettings>) {
 		settingsState.font.weight = partial.weight;
 	}
 	setSetting('font', $state.snapshot(settingsState.font));
+}
+
+export function setRenderer(renderer: RendererKind) {
+	settingsState.renderer = renderer;
+	setSetting('renderer', renderer);
 }
 
 export function resetFont() {

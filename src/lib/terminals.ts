@@ -12,11 +12,11 @@ export const XTERM_THEMES: Record<Theme, ITheme> = {
 		// Kept at the app's panel tone rather than VS Code's #191A1B so the
 		// terminal and the pane chrome stay on one surface colour
 		background: '#14161c',
-		// VS Code Dark 2026 terminal.foreground. Deliberately below pure white:
-		// near-white on near-black lands around 13:1, where light glyphs halate
-		// and read as blurry. Against our background this is ~11:1, matching
-		// VS Code's own #CCCCCC-on-#191A1B.
-		foreground: '#cccccc',
+		// Deliberately below pure white: near-white on near-black halates and
+		// reads as blurry. One step below VS Code's #CCCCCC (~11:1 here) —
+		// ~10:1 against our background trades a little contrast for visibly
+		// less glow around thin strokes on dark.
+		foreground: '#c0c0c0',
 		cursor: '#6ea3ff',
 		selectionBackground: '#3994bc33',
 		// VS Code dark ANSI palette (terminal.ansi* defaults)
@@ -79,6 +79,8 @@ export interface TermBundle {
 	term: Terminal;
 	fit: FitAddon;
 	search: SearchAddon;
+	/** Present while the WebGL renderer is active; absent on the DOM renderer */
+	webgl?: WebglAddon;
 }
 
 /**
@@ -126,6 +128,33 @@ export function getTerminal(session: Session): TermBundle {
 	return bundle;
 }
 
+/**
+ * Renderer trade-off: WebGL is fast under heavy output but canvas glyphs only
+ * get grayscale AA; the DOM renderer gets ClearType subpixel AA (sharp next to
+ * native Windows text) at the cost of throughput. User-selectable in settings.
+ */
+function applyRenderer(bundle: TermBundle) {
+	const wantWebgl = settingsState.renderer === 'webgl';
+	if (wantWebgl && !bundle.webgl && bundle.term.element) {
+		try {
+			bundle.webgl = new WebglAddon();
+			bundle.term.loadAddon(bundle.webgl);
+		} catch {
+			// Fall back to the DOM renderer where WebGL is unavailable
+			bundle.webgl = undefined;
+		}
+	} else if (!wantWebgl && bundle.webgl) {
+		// Disposing the addon drops the terminal back to the DOM renderer
+		bundle.webgl.dispose();
+		bundle.webgl = undefined;
+	}
+}
+
+/** Switch every live terminal to the renderer currently selected in settings */
+export function applyRendererToAll() {
+	for (const bundle of cache.values()) applyRenderer(bundle);
+}
+
 /** Open in the container on first mount; on later mounts move the existing DOM element */
 export function attachToContainer(bundle: TermBundle, container: HTMLElement) {
 	const { term } = bundle;
@@ -133,11 +162,7 @@ export function attachToContainer(bundle: TermBundle, container: HTMLElement) {
 		container.appendChild(term.element);
 	} else {
 		term.open(container);
-		try {
-			term.loadAddon(new WebglAddon());
-		} catch {
-			// Fall back to the default renderer where WebGL is unavailable
-		}
+		applyRenderer(bundle);
 		// PuTTY-style clipboard: right click pastes (the listener stays with the
 		// element across remounts, so wire it only on the initial open).
 		// The cast is needed because TS narrowed `element` before open() populated it.

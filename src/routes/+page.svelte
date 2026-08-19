@@ -42,7 +42,7 @@
 		resetColors,
 		type ColorKey
 	} from '$lib/stores/theme.svelte';
-	import { XTERM_THEMES } from '$lib/terminals';
+	import { XTERM_THEMES, applyRendererToAll } from '$lib/terminals';
 	import { saveStatus, clearSaveFailure } from '$lib/stores/savestatus.svelte';
 
 	// Colour pickers show the effective value, so unset fields start from the built-in theme
@@ -73,7 +73,9 @@
 		initSettings,
 		setFont,
 		resetFont,
-		setLogDir
+		setRenderer,
+		setLogDir,
+		type RendererKind
 	} from '$lib/stores/settings.svelte';
 
 	// Maximized tile takes over the whole area; null renders the normal layout
@@ -403,6 +405,19 @@
 						{#each FONT_WEIGHTS as w (w.value)}
 							<option value={w.value}>{t(`settings.weight.${w.key}`)}</option>
 						{/each}
+					</select>
+				</label>
+				<label>
+					<span>{t('settings.renderer')}</span>
+					<select
+						value={settingsState.renderer}
+						onchange={(e) => {
+							setRenderer(e.currentTarget.value as RendererKind);
+							applyRendererToAll();
+						}}
+					>
+						<option value="webgl">{t('settings.renderer.webgl')}</option>
+						<option value="dom">{t('settings.renderer.dom')}</option>
 					</select>
 				</label>
 				<span class="panel-section">{t('settings.colors')}</span>

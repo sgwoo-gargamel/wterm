@@ -8,6 +8,7 @@ export interface PersistedSettings {
 	theme?: 'dark' | 'light';
 	themeColors?: unknown;
 	font?: unknown;
+	renderer?: 'webgl' | 'dom';
 	logDir?: string;
 	profiles?: unknown[];
 	last_by_type?: unknown;
