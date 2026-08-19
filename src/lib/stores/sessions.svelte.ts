@@ -3,6 +3,7 @@ import * as ipc from '$lib/ipc';
 import type { OutputEvent, Profile } from '$lib/ipc';
 import { disposeTerminal } from '$lib/terminals';
 import { multiSend } from './multisend.svelte';
+import { refreshPorts } from './ports.svelte';
 
 export type SessionStatus = 'connected' | 'disconnected';
 
@@ -103,6 +104,14 @@ export function closeSession(id: string) {
 	if (session) {
 		session.close();
 		sessions.delete(id);
+		// The connect form that replaces the pane enumerates ports right away,
+		// while the backend takes up to ~50ms (read-thread poll) plus OS time to
+		// actually release the COM port — so that first enumeration still sees it
+		// as busy, and the cooldown then pins the stale entry. Re-enumerate after
+		// the port has really been released.
+		if (session.profile.type === 'serial') {
+			setTimeout(() => void refreshPorts(true), 300);
+		}
 	}
 	multiSend.targets.delete(id);
 	disposeTerminal(id);
