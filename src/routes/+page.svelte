@@ -567,9 +567,11 @@
 	}
 	:global(:root[data-theme='light']) {
 		color-scheme: light;
-		/* Windows 11 light palette: layer #f9f9f9 on base #f3f3f3 (Notepad uses the same) */
+		/* Windows 11 light palette, except the panel: neutral gray to cut the
+		   glare of near-white terminal areas. Keep in sync with the light xterm
+		   theme background in terminals.ts. */
 		--bg: #f3f3f3;
-		--bg-panel: #f9f9f9;
+		--bg-panel: #f0efed;
 		--bg-elev: #efefef;
 		--bg-input: #fbfbfb;
 		--accent-soft: #dceafb;

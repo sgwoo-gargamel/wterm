@@ -38,8 +38,11 @@ export const XTERM_THEMES: Record<Theme, ITheme> = {
 		brightWhite: '#e5e5e5'
 	},
 	light: {
-		// Windows 11 light "layer" tone, same as Notepad's editor area
-		background: '#f9f9f9',
+		// Neutral gray instead of Windows' near-white layer tone (#f9f9f9):
+		// full-brightness white at terminal size is glaring; this keeps ~13:1
+		// against the foreground so sharpness doesn't suffer. Must stay in sync
+		// with --bg-panel (light) — the container padding shows that colour.
+		background: '#f0efed',
 		foreground: '#1b1b1b',
 		cursor: '#2563eb',
 		selectionBackground: '#cce0f9',
