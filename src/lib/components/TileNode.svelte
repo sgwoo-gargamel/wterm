@@ -6,6 +6,7 @@
 	let { node }: { node: LayoutNode } = $props();
 
 	let container: HTMLDivElement | undefined = $state();
+	let dragging = $state(false);
 
 	function startDrag(e: PointerEvent, split: SplitNode) {
 		e.preventDefault();
@@ -30,12 +31,14 @@
 			});
 		};
 		const up = () => {
+			dragging = false;
 			if (raf) cancelAnimationFrame(raf);
 			window.removeEventListener('pointermove', move);
 			window.removeEventListener('pointerup', up);
 			document.body.style.cursor = '';
 			document.body.style.userSelect = '';
 		};
+		dragging = true;
 		window.addEventListener('pointermove', move);
 		window.addEventListener('pointerup', up);
 		document.body.style.cursor = split.direction === 'row' ? 'col-resize' : 'row-resize';
@@ -55,7 +58,7 @@
 		<Pane pane={node} />
 	{/key}
 {:else}
-	<div class="split {node.direction}" bind:this={container}>
+	<div class="split {node.direction}" class:dragging bind:this={container}>
 		<div class="child" style="flex-grow: {node.ratio}">
 			<TileNode node={node.children[0]} />
 		</div>
@@ -74,6 +77,7 @@
 <style>
 	.split {
 		display: flex;
+		position: relative;
 		width: 100%;
 		height: 100%;
 		min-width: 0;
@@ -97,8 +101,21 @@
 		transition: background 0.1s;
 		z-index: 1;
 	}
-	.divider:hover {
+	.divider:hover,
+	.split.dragging > .divider {
 		background: var(--border-accent);
+	}
+	/* Outline the split this divider resizes, so it's clear which tiles move.
+	   Drawn as an overlay above the terminal canvases, which would cover a
+	   plain outline/border on the container. */
+	.split:has(> .divider:hover)::after,
+	.split.dragging::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border: 2px solid #f97316;
+		pointer-events: none;
+		z-index: 2;
 	}
 	.divider.row {
 		width: 4px;
