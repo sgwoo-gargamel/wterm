@@ -18,15 +18,19 @@ pub fn spawn(
     cleanup: SessionCleanup,
     logger: SessionLogger,
 ) -> Result<()> {
+    // Short read timeout: the port is opened without FILE_FLAG_OVERLAPPED and the
+    // writer is a DuplicateHandle clone, so Windows serializes I/O on the shared
+    // file object — a blocked ReadFile delays WriteFile by up to this timeout,
+    // which is felt directly as keystroke latency.
     let mut reader = serialport::new(&port_name, baud_rate)
-        .timeout(Duration::from_millis(50))
+        .timeout(Duration::from_millis(5))
         .open()?;
     let mut writer = reader.try_clone()?;
 
     let _ = output.send(OutputEvent::Connected);
     let stop = Arc::new(AtomicBool::new(false));
 
-    // Read thread: poll with a 50ms timeout, checking the stop flag between reads
+    // Read thread: poll with a 5ms timeout, checking the stop flag between reads
     {
         let stop = Arc::clone(&stop);
         let output = output.clone();
