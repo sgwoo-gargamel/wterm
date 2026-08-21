@@ -136,4 +136,10 @@
 	   (built-in themes match it by design, and user overrides update it too). */
 	.term-container :global(.xterm-viewport) {
 		background: transparent;
+		/* In xterm 6 scrolling lives in the custom .xterm-scrollable-element;
+		   this viewport div is an empty leftover, but xterm.css still forces
+		   overflow-y: scroll on it. Wherever scrollbars are always visible
+		   (classic/accessibility mode) that paints a light native scrollbar
+		   track down the terminal's right edge, covering the last column. */
+		overflow-y: hidden;
 	}</style>
