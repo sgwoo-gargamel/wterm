@@ -1,6 +1,6 @@
 [package]
 name = "wterm"
-version = "0.1.7"
+version = "0.1.8"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -22,7 +22,11 @@ tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# serialport: port enumeration only (USB product names, Bluetooth detection);
+# session I/O uses serial2-tokio, whose overlapped I/O on Windows lets reads and
+# writes run concurrently — serialport's sync handles block each other there.
 serialport = "4.9.0"
+serial2-tokio = "0.1.25"
 russh = { version = "0.62.4", default-features = false, features = ["ring", "flate2", "rsa"] }
 thiserror = "2.0.19"
 uuid = { version = "1.24.0", features = ["v4"] }

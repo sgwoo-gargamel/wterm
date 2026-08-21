@@ -20,35 +20,63 @@ pub struct PortInfo {
 #[tauri::command(async)]
 pub fn list_serial_ports() -> Result<Vec<PortInfo>> {
     let ports = serialport::available_ports()?;
-    Ok(ports
-        .into_iter()
+
+    // Probe-open to detect ports held by another app or one of our sessions.
+    // Never for Bluetooth: opening an outgoing SPP port makes Windows try to
+    // establish the link, which blocks for tens of seconds when the device is
+    // away — and "busy" says nothing useful about a port that is not paired up
+    // anyway. Those are reported free and left for the connect attempt to judge.
+    //
+    // Probes run in parallel under one time budget: a degraded driver instance
+    // (seen on FTDI adapters after a surprise removal) can take ~5s per open,
+    // and probing serially would blank the whole port list for the sum of them.
+    // A port whose probe misses the budget is reported free — again the connect
+    // attempt gets to judge. The straggler thread just closes the port late.
+    let mut infos: Vec<PortInfo> = ports
+        .iter()
         .map(|p| {
-            let bluetooth = matches!(&p.port_type, serialport::SerialPortType::BluetoothPort);
-            let kind = match p.port_type {
+            let kind = match &p.port_type {
                 serialport::SerialPortType::UsbPort(info) => {
-                    info.product.unwrap_or_else(|| "USB".into())
+                    info.product.clone().unwrap_or_else(|| "USB".into())
                 }
                 serialport::SerialPortType::BluetoothPort => "Bluetooth".into(),
                 serialport::SerialPortType::PciPort => "PCI".into(),
                 serialport::SerialPortType::Unknown => String::new(),
             };
-            // Probe-open to detect ports held by another app or one of our sessions.
-            // Never for Bluetooth: opening an outgoing SPP port makes Windows try to
-            // establish the link, which blocks for tens of seconds when the device is
-            // away — and "busy" says nothing useful about a port that is not paired up
-            // anyway. Those are reported free and left for the connect attempt to judge.
-            let in_use = !bluetooth
-                && serialport::new(&p.port_name, 9600)
-                    .timeout(std::time::Duration::from_millis(50))
-                    .open()
-                    .is_err();
             PortInfo {
-                name: p.port_name,
+                name: p.port_name.clone(),
                 kind,
-                in_use,
+                in_use: false,
             }
         })
-        .collect())
+        .collect();
+
+    let (tx, rx) = std::sync::mpsc::channel::<(usize, bool)>();
+    for (i, p) in ports.iter().enumerate() {
+        if matches!(&p.port_type, serialport::SerialPortType::BluetoothPort) {
+            continue;
+        }
+        let tx = tx.clone();
+        let name = p.port_name.clone();
+        std::thread::spawn(move || {
+            let busy = serialport::new(&name, 9600)
+                .timeout(std::time::Duration::from_millis(50))
+                .open()
+                .is_err();
+            let _ = tx.send((i, busy));
+        });
+    }
+    drop(tx);
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
+    loop {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        match rx.recv_timeout(remaining) {
+            Ok((i, busy)) => infos[i].in_use = busy,
+            Err(_) => break, // all probes done, or budget spent
+        }
+    }
+    Ok(infos)
 }
 
 /// Enumerate installed fixed-pitch (monospace) font family names via GDI.

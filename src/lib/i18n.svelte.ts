@@ -105,6 +105,7 @@ const ko = {
 	'reason.closed': '연결이 종료되었습니다',
 	'reason.remote-closed': '원격 호스트가 연결을 종료했습니다',
 	'reason.write-failed': '전송 실패: 연결이 끊어졌습니다',
+	'reason.device-removed': '장치가 분리되었습니다',
 	'save.failed': '설정을 저장하지 못했습니다',
 	'save.failedHint': '변경한 내용이 다음 실행에 남지 않습니다. 아래 경로에 쓰기 권한이 있는지 확인하세요.',
 	'save.dismiss': '닫기'
@@ -213,6 +214,7 @@ const en: Record<MessageKey, string> = {
 	'reason.closed': 'Connection closed',
 	'reason.remote-closed': 'The remote host closed the connection',
 	'reason.write-failed': 'Send failed: connection lost',
+	'reason.device-removed': 'The device was disconnected',
 	'save.failed': 'Could not save settings',
 	'save.failedHint': 'Your changes will not survive a restart. Check that this location is writable.',
 	'save.dismiss': 'Dismiss'

@@ -105,10 +105,10 @@ export function closeSession(id: string) {
 		session.close();
 		sessions.delete(id);
 		// The connect form that replaces the pane enumerates ports right away,
-		// while the backend takes up to ~5ms (read-thread poll) plus OS time to
-		// actually release the COM port — so that first enumeration still sees it
-		// as busy, and the cooldown then pins the stale entry. Re-enumerate after
-		// the port has really been released.
+		// while the backend still needs a moment (async close round-trip plus OS
+		// time) to actually release the COM port — so that first enumeration can
+		// still see it as busy, and the cooldown then pins the stale entry.
+		// Re-enumerate after the port has really been released.
 		if (session.profile.type === 'serial') {
 			setTimeout(() => void refreshPorts(true), 300);
 		}
