@@ -116,12 +116,24 @@
 		width: 100%;
 		height: 100%;
 		background: var(--bg-panel);
-		/* Extra room at the bottom: the fit addon floors the row count against the
-		   content height, so the last row can end within a pixel or two of the box.
-		   Without the slack a block cursor on the last line touches the pane border
-		   and reads as clipped. Right stays 0 — that strip is xterm's scrollbar. */
-		padding: 4px 0 12px 4px;
-		box-sizing: border-box;
 		overflow: hidden;
 	}
-</style>
+	/* Breathing room around the text on all four sides, so glyphs never touch the
+	   tile border or get clipped at the pane edge. The padding MUST live on the
+	   .xterm element, not on .term-container: the fit addon subtracts the .xterm
+	   element's own padding, but it measures the parent via getComputedStyle()
+	   height/width, which Chromium reports as the border-box — parent padding is
+	   invisible to it, so rows overshoot and the last line gets cut off. The
+	   viewport (scrollbar + background) still spans the full box, so the padding
+	   area is painted in the terminal background colour. */
+	.term-container :global(.xterm) {
+		padding: 4px 4px 6px 6px;
+	}
+	/* xterm 6 paints the theme background only on the scrollable element (the
+	   text area); the viewport behind it keeps xterm.css's static #000 and spans
+	   the whole padded box, so it would tint the padding ring black. Let the
+	   container's --bg-panel show instead — it tracks the terminal background
+	   (built-in themes match it by design, and user overrides update it too). */
+	.term-container :global(.xterm-viewport) {
+		background: transparent;
+	}</style>
