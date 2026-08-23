@@ -8,12 +8,17 @@
 	let container: HTMLDivElement | undefined = $state();
 	let dragging = $state(false);
 
-	function startDrag(e: PointerEvent, split: SplitNode) {
+	/** Drag the divider after child `index`: only that child and the next one trade space */
+	function startDrag(e: PointerEvent, split: SplitNode, index: number) {
 		e.preventDefault();
 		const rect = container?.getBoundingClientRect();
 		if (!rect) return;
 
-		// Throttle ratio updates to one per frame — every update reflows all
+		const pairStart = split.sizes.slice(0, index).reduce((a, b) => a + b, 0);
+		const pairTotal = split.sizes[index] + split.sizes[index + 1];
+		const min = pairTotal * 0.1;
+
+		// Throttle size updates to one per frame — every update reflows all
 		// descendant terminals, which is costly with several tiles
 		let raf = 0;
 		let lastEvent: PointerEvent | null = null;
@@ -27,7 +32,9 @@
 					split.direction === 'row'
 						? (lastEvent.clientX - rect.left) / rect.width
 						: (lastEvent.clientY - rect.top) / rect.height;
-				split.ratio = Math.min(0.9, Math.max(0.1, frac));
+				const first = Math.min(pairTotal - min, Math.max(min, frac - pairStart));
+				split.sizes[index] = first;
+				split.sizes[index + 1] = pairTotal - first;
 			});
 		};
 		const up = () => {
@@ -44,6 +51,11 @@
 		document.body.style.cursor = split.direction === 'row' ? 'col-resize' : 'row-resize';
 		document.body.style.userSelect = 'none';
 	}
+
+	/** Double-click on any divider evens out the whole group */
+	function equalize(split: SplitNode) {
+		split.sizes = split.sizes.map(() => 1 / split.sizes.length);
+	}
 </script>
 
 {#if node.kind === 'pane'}
@@ -59,18 +71,19 @@
 	{/key}
 {:else}
 	<div class="split {node.direction}" class:dragging bind:this={container}>
-		<div class="child" style="flex-grow: {node.ratio}">
-			<TileNode node={node.children[0]} />
-		</div>
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div
-			class="divider {node.direction}"
-			onpointerdown={(e) => startDrag(e, node)}
-			ondblclick={() => (node.ratio = 0.5)}
-		></div>
-		<div class="child" style="flex-grow: {1 - node.ratio}">
-			<TileNode node={node.children[1]} />
-		</div>
+		{#each node.children as child, i (child.id)}
+			{#if i > 0}
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<div
+					class="divider {node.direction}"
+					onpointerdown={(e) => startDrag(e, node, i - 1)}
+					ondblclick={() => equalize(node)}
+				></div>
+			{/if}
+			<div class="child" style="flex-grow: {node.sizes[i]}">
+				<TileNode node={child} />
+			</div>
+		{/each}
 	</div>
 {/if}
 
@@ -105,10 +118,9 @@
 	.split.dragging > .divider {
 		background: var(--border-accent);
 	}
-	/* Outline the split this divider resizes, so it's clear which tiles move.
-	   Drawn as an overlay above the terminal canvases, which would cover a
-	   plain outline/border on the container. */
-	.split:has(> .divider:hover)::after,
+	/* While a divider is held, outline the split it resizes so it's clear which
+	   tiles move. Drawn as an overlay above the terminal canvases, which would
+	   cover a plain outline/border on the container. */
 	.split.dragging::after {
 		content: '';
 		position: absolute;

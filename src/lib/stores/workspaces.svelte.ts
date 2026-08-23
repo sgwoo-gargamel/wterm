@@ -9,9 +9,16 @@ import {
 } from './layout.svelte';
 import { sessions } from './sessions.svelte';
 
-/** A layout stripped down to what survives a restart: shape, ratios and connections */
+/** A layout stripped down to what survives a restart: shape, sizes and connections */
 export type SavedNode =
 	| { kind: 'pane'; profile: Profile | null }
+	| {
+			kind: 'split';
+			direction: 'row' | 'column';
+			sizes: number[];
+			children: SavedNode[];
+	  }
+	/** Pre-0.1.9 files: binary splits with a first-child ratio */
 	| {
 			kind: 'split';
 			direction: 'row' | 'column';
@@ -34,10 +41,13 @@ export const workspacesState = $state<{ list: Workspace[]; name: string }>({
 
 function isSavedNode(node: unknown): node is SavedNode {
 	if (!node || typeof node !== 'object') return false;
-	const n = node as { kind?: string; children?: unknown };
+	const n = node as { kind?: string; children?: unknown; sizes?: unknown; ratio?: unknown };
 	if (n.kind === 'pane') return true;
-	if (n.kind !== 'split' || !Array.isArray(n.children) || n.children.length !== 2) return false;
-	return isSavedNode(n.children[0]) && isSavedNode(n.children[1]);
+	if (n.kind !== 'split' || !Array.isArray(n.children) || n.children.length < 2) return false;
+	const sized = Array.isArray(n.sizes)
+		? n.sizes.length === n.children.length && n.sizes.every((s) => typeof s === 'number')
+		: typeof n.ratio === 'number' && n.children.length === 2;
+	return sized && n.children.every(isSavedNode);
 }
 
 export function initWorkspaces() {
@@ -68,19 +78,20 @@ function capture(node: LayoutNode): SavedNode {
 	return {
 		kind: 'split',
 		direction: node.direction,
-		ratio: node.ratio,
-		children: [capture(node.children[0]), capture(node.children[1])]
+		sizes: [...node.sizes],
+		children: node.children.map(capture)
 	};
 }
 
+/** Rebuild a saved tree with its exact shape; legacy files carry a first-child ratio instead of sizes */
 function build(node: SavedNode): LayoutNode {
 	if (node.kind === 'pane') return newPaneFor(node.profile);
 	return {
 		kind: 'split',
 		id: newSplitId(),
 		direction: node.direction,
-		ratio: node.ratio,
-		children: [build(node.children[0]), build(node.children[1])]
+		sizes: 'sizes' in node ? [...node.sizes] : [node.ratio, 1 - node.ratio],
+		children: node.children.map(build)
 	};
 }
 
