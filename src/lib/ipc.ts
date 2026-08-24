@@ -46,6 +46,17 @@ export function listFonts(): Promise<string[]> {
 	return invoke<string[]>('list_fonts');
 }
 
+export interface VersionInfo {
+	/** Package version, e.g. `0.1.8` */
+	version: string;
+	/** Short git revision baked in at build time (`cd34938`, `+` when dirty); empty if unknown */
+	rev: string;
+}
+
+export function appVersion(): Promise<VersionInfo> {
+	return invoke<VersionInfo>('app_version');
+}
+
 export function openSession(
 	profile: Profile,
 	password: string | null,

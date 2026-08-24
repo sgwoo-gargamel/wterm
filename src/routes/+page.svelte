@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import TileNode from '$lib/components/TileNode.svelte';
-	import { listFonts } from '$lib/ipc';
+	import { listFonts, appVersion, type VersionInfo } from '$lib/ipc';
 	import { initPersist } from '$lib/persist';
 	import Pane from '$lib/components/Pane.svelte';
 	import ColorPicker from '$lib/components/ColorPicker.svelte';
@@ -10,7 +10,9 @@
 	import panelAddIcon from '@fluentui/svg-icons/icons/panel_left_add_20_filled.svg?raw';
 	import textFontSizeIcon from '@fluentui/svg-icons/icons/text_font_size_20_regular.svg?raw';
 	import folderIcon from '@fluentui/svg-icons/icons/folder_20_regular.svg?raw';
+	import questionIcon from '@fluentui/svg-icons/icons/question_circle_20_regular.svg?raw';
 	import { open } from '@tauri-apps/plugin-dialog';
+	import { getCurrentWindow } from '@tauri-apps/api/window';
 	import {
 		selectAll,
 		clearTargets,
@@ -124,6 +126,35 @@
 		}
 	}
 
+	// --- About: the "?" button opens version + git revision, once the title bar's job ---
+	let version = $state<VersionInfo | null>(null);
+	let aboutOpen = $state(false);
+	let aboutPanel = $state<HTMLElement | null>(null);
+	let aboutButton = $state<HTMLElement | null>(null);
+
+	// The window has no native title bar, so the toolbar's empty space acts as one:
+	// drag to move, double-click to maximize. Only blank toolbar areas qualify, so the
+	// buttons, inputs and pop-up panels inside it keep their normal behaviour.
+	const appWindow = getCurrentWindow();
+	function isDragArea(target: EventTarget | null) {
+		const el = target as HTMLElement | null;
+		return (
+			!!el &&
+			(el.classList.contains('toolbar') ||
+				el.classList.contains('toolbar-body') ||
+				el.classList.contains('group') ||
+				el.classList.contains('group-label'))
+		);
+	}
+	function onToolbarMouseDown(e: MouseEvent) {
+		if (e.button !== 0 || e.detail !== 1 || !isDragArea(e.target)) return;
+		void appWindow.startDragging();
+	}
+	function onToolbarDblClick(e: MouseEvent) {
+		if (!isDragArea(e.target)) return;
+		void appWindow.toggleMaximize();
+	}
+
 	onMount(() => {
 		// Settings live in one JSON file; load it before the stores read from it
 		void initPersist().then(() => {
@@ -134,6 +165,7 @@
 			initSendHistory();
 			initWorkspaces();
 		});
+		void appVersion().then((v) => (version = v));
 
 		// Handle shortcuts in the capture phase before xterm consumes the keys
 		const onKeydown = (e: KeyboardEvent) => {
@@ -168,6 +200,9 @@
 			) {
 				workspaceOpen = false;
 			}
+			if (aboutOpen && !aboutPanel?.contains(target) && !aboutButton?.contains(target)) {
+				aboutOpen = false;
+			}
 		};
 		window.addEventListener('pointerdown', onPointerDown);
 
@@ -179,7 +214,12 @@
 </script>
 
 <div class="app">
-	<header class="toolbar">
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<header class="toolbar" onmousedown={onToolbarMouseDown} ondblclick={onToolbarDblClick}>
+		<!-- When the window is too narrow the lowest-priority groups are hidden outright
+		     (see the container queries below) so nothing overflows into its neighbour;
+		     the window controls always stay at the right edge -->
+		<div class="toolbar-body">
 		<!-- The label is the current workspace name; the caret opens the saved list -->
 		<div class="workspace">
 			<!-- Keyed so loading a workspace refreshes the text the user can edit -->
@@ -296,7 +336,7 @@
 		</div>
 
 		<!-- Add a tile on each side of the whole layout -->
-		<div class="group">
+		<div class="group g-add">
 			<span class="group-label">{t('group.addTile')}</span>
 			<button
 				type="button"
@@ -332,7 +372,7 @@
 			</button>
 		</div>
 
-		<div class="group">
+		<div class="group g-logdir">
 			<span class="group-label">{t('group.logDir')}</span>
 			<button
 				type="button"
@@ -345,7 +385,7 @@
 			</button>
 		</div>
 
-		<div class="group">
+		<div class="group g-settings">
 			<span class="group-label">{t('group.settings')}</span>
 			<!-- Windows IME-style language toggle: 가 = Korean, A = English -->
 			<button
@@ -368,6 +408,45 @@
 			<!-- Theme toggle: shows the current theme (☾ dark / ☀ light) -->
 			<button type="button" class="lang" title={t('toolbar.theme')} onclick={toggleTheme}>
 				{themeState.theme === 'dark' ? '☾' : '☀'}
+			</button>
+			<button
+				type="button"
+				class="lang icon-btn"
+				title={t('toolbar.about')}
+				bind:this={aboutButton}
+				onclick={() => (aboutOpen = !aboutOpen)}
+			>
+				{@html questionIcon}
+			</button>
+		</div>
+		</div>
+
+		<!-- Window controls replace the removed native title bar -->
+		<div class="win-controls">
+			<button
+				type="button"
+				title={t('window.minimize')}
+				aria-label={t('window.minimize')}
+				onclick={() => appWindow.minimize()}
+			>
+				<svg viewBox="0 0 10 10"><path d="M0 5h10" /></svg>
+			</button>
+			<button
+				type="button"
+				title={t('window.maximize')}
+				aria-label={t('window.maximize')}
+				onclick={() => appWindow.toggleMaximize()}
+			>
+				<svg viewBox="0 0 10 10"><path d="M0.5 0.5h9v9h-9z" /></svg>
+			</button>
+			<button
+				type="button"
+				class="win-close"
+				title={t('window.close')}
+				aria-label={t('window.close')}
+				onclick={() => appWindow.close()}
+			>
+				<svg viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10" /></svg>
 			</button>
 		</div>
 		{#if settingsOpen}
@@ -435,6 +514,19 @@
 						{t('settings.resetColors')}
 					</button>
 					<button type="button" class="reset" onclick={resetFont}>{t('settings.reset')}</button>
+				</div>
+			</div>
+		{/if}
+		{#if aboutOpen}
+			<div class="about-panel" bind:this={aboutPanel}>
+				<strong>wterm</strong>
+				<div class="about-row">
+					<span>{t('app.version')}</span>
+					<span>{version ? `v${version.version}` : '…'}</span>
+				</div>
+				<div class="about-row">
+					<span>{t('app.revision')}</span>
+					<span class="mono">{version?.rev || '—'}</span>
 				</div>
 			</div>
 		{/if}
@@ -626,13 +718,43 @@
 	.toolbar {
 		display: flex;
 		align-items: center;
-		gap: 6px;
 		/* Flush on all sides — no frame, no border, no shadow */
 		padding: 4px 12px;
 		margin: 0;
 		background: var(--bg-elev);
 		border: none;
 		flex-shrink: 0;
+	}
+	.toolbar-body {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		/* Lets the queries below react to the space left over next to the window controls */
+		container-type: inline-size;
+	}
+	/* Drop groups one by one as the room runs out, least important first. The thresholds
+	   are the summed natural widths of what remains, with slack for the longer English labels */
+	@container (max-width: 900px) {
+		.group.g-logdir {
+			display: none;
+		}
+	}
+	@container (max-width: 750px) {
+		.group.g-settings {
+			display: none;
+		}
+	}
+	@container (max-width: 540px) {
+		.group.g-add {
+			display: none;
+		}
+	}
+	@container (max-width: 340px) {
+		.group.grow {
+			display: none;
+		}
 	}
 	/* Anchor for the workspace drop-down */
 	.workspace {
@@ -782,7 +904,8 @@
 	/* The one group that stretches; the rest keep their natural width */
 	.group.grow {
 		flex: 1;
-		min-width: 0;
+		/* Never squeeze the send box to nothing — the queries above hide it first */
+		min-width: 200px;
 		margin-left: 0;
 	}
 	.group-label {
@@ -849,6 +972,32 @@
 		fill: currentColor;
 		display: block;
 	}
+	/* Caption-style window buttons (minimize / maximize / close) at the toolbar's right edge */
+	.win-controls {
+		display: flex;
+		flex-shrink: 0;
+		align-self: stretch;
+		margin: -4px -12px -4px 4px;
+	}
+	.win-controls button {
+		width: 46px;
+		border-radius: 0;
+		padding: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.win-controls svg {
+		width: 10px;
+		height: 10px;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 1;
+	}
+	.win-controls .win-close:hover {
+		background: #c42b1c;
+		color: #fff;
+	}
 	/* Rotations turn the "add panel on the left" glyph into the other directions */
 	.rot-90 :global(svg) {
 		transform: rotate(90deg);
@@ -885,6 +1034,38 @@
 		border: 1px solid var(--border-accent);
 		border-radius: 8px;
 		box-shadow: 0 8px 20px var(--shadow);
+	}
+	/* Same card as the settings panel, sized to its two lines */
+	.about-panel {
+		position: absolute;
+		top: calc(100% + 4px);
+		right: 10px;
+		z-index: 50;
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+		min-width: 180px;
+		padding: 0.6rem 0.7rem;
+		font-size: 0.78rem;
+		background: var(--bg-elev);
+		border: 1px solid var(--border-accent);
+		border-radius: 8px;
+		box-shadow: 0 8px 20px var(--shadow);
+	}
+	.about-panel strong {
+		color: var(--accent);
+		margin-bottom: 0.15rem;
+	}
+	.about-row {
+		display: flex;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+	.about-row span:first-child {
+		color: var(--fg-muted);
+	}
+	.about-row .mono {
+		font-family: monospace;
 	}
 	.settings-panel label {
 		display: flex;
