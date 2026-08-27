@@ -181,6 +181,16 @@ export function attachToContainer(bundle: TermBundle, container: HTMLElement) {
 	}
 }
 
+/** Clear a session's screen and scrollback, keeping only the current bottom line */
+export function clearTerminal(sessionId: string) {
+	const term = cache.get(sessionId)?.term;
+	if (!term) return;
+	term.clear();
+	// Invoked from a title-bar button — hand focus back to the terminal so
+	// typing resumes immediately instead of re-triggering the button on Enter
+	term.focus();
+}
+
 /** Dispose and forget a session's terminal (call when the session is closed for good) */
 export function disposeTerminal(sessionId: string) {
 	const bundle = cache.get(sessionId);

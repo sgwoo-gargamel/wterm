@@ -17,6 +17,7 @@
 	import { settingsState } from '$lib/stores/settings.svelte';
 	import { multiSend, toggleTarget } from '$lib/stores/multisend.svelte';
 	import resizeIcon from '@fluentui/svg-icons/icons/resize_20_regular.svg?raw';
+	import broomIcon from '@fluentui/svg-icons/icons/broom_20_regular.svg?raw';
 	import saveIcon from '@fluentui/svg-icons/icons/save_20_regular.svg?raw';
 	import splitVerticalIcon from '@fluentui/svg-icons/icons/split_vertical_20_regular.svg?raw';
 	import splitHorizontalIcon from '@fluentui/svg-icons/icons/split_horizontal_20_regular.svg?raw';
@@ -25,6 +26,7 @@
 	import { recordUse, type ProfileEntry } from '$lib/stores/profiles.svelte';
 	import { portsState, portUnavailable, refreshPorts } from '$lib/stores/ports.svelte';
 	import { t, translateReason } from '$lib/i18n.svelte';
+	import { clearTerminal } from '$lib/terminals';
 	import TerminalView from './TerminalView.svelte';
 	import SendBox from './SendBox.svelte';
 	import ConnectForm from './ConnectForm.svelte';
@@ -368,6 +370,10 @@
 					{@html resizeIcon}
 				</button>
 			{/if}
+			<!-- Wipe the screen and scrollback of this tile's terminal -->
+			<button type="button" class="tb" title={t('pane.clear')} onclick={() => clearTerminal(session.id)}>
+				{@html broomIcon}
+			</button>
 			<!-- Opt this tile into toolbar multi-send -->
 			<label class="multi" title={t('multi.target')}>
 				<span>{t('multi.label')}</span>
@@ -828,8 +834,8 @@
 		min-width: 280px;
 		max-width: min(420px, 92%);
 		padding: 2rem 2.6rem;
-		background: var(--bg-elev);
-		border: 1px solid var(--border-accent);
+		background: var(--popup-bg);
+		border: 1px solid var(--popup-border);
 		border-radius: 14px;
 		box-shadow: 0 10px 28px var(--shadow);
 		pointer-events: none;
@@ -837,23 +843,23 @@
 	.progress-title {
 		margin: 0;
 		font-size: 1.05rem;
-		color: var(--fg);
+		color: var(--popup-fg);
 	}
 	.progress-title.failed {
-		color: var(--danger);
+		color: var(--popup-danger);
 	}
 	.progress-detail {
 		margin: 0;
 		max-width: 340px;
 		font-size: 0.82rem;
-		color: var(--fg-muted);
+		color: var(--popup-fg-muted);
 		text-align: center;
 		word-break: break-word;
 	}
 	.progress-hint {
 		margin: 0;
 		font-size: 0.8rem;
-		color: var(--fg-faint);
+		color: var(--popup-fg-faint);
 	}
 	.progress-overlay:focus-visible .progress-card {
 		border-color: var(--accent);

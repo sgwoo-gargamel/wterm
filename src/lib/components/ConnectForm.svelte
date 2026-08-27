@@ -481,15 +481,15 @@
 		min-width: 280px;
 		max-width: min(420px, 92%);
 		padding: 2rem 2.6rem;
-		background: var(--bg-elev);
-		border: 1px solid var(--border-accent);
+		background: var(--popup-bg);
+		border: 1px solid var(--popup-border);
 		border-radius: 14px;
 		box-shadow: 0 10px 28px var(--shadow);
 	}
 	.warmup-card p {
 		margin: 0;
 		font-size: 1.05rem;
-		color: var(--fg);
+		color: var(--popup-fg);
 	}
 	.ghost {
 		visibility: hidden;

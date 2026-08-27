@@ -656,6 +656,15 @@
 		--badge-ssh-fg: #8ab0f5;
 		--badge-telnet-bg: #46392a;
 		--badge-telnet-fg: #e0b370;
+		/* Connection-progress popups (Pane / ConnectForm) keep the dark look in
+		   both themes so the hamster wheel reads the same everywhere — the light
+		   block below deliberately does not override these */
+		--popup-bg: #1a1d25;
+		--popup-border: #3b558e;
+		--popup-fg: #d8dce4;
+		--popup-fg-muted: #8b93a1;
+		--popup-fg-faint: #5c6370;
+		--popup-danger: #e06c75;
 	}
 	:global(:root[data-theme='light']) {
 		color-scheme: light;
