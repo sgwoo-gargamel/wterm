@@ -21,7 +21,7 @@
 	import saveIcon from '@fluentui/svg-icons/icons/save_20_regular.svg?raw';
 	import splitVerticalIcon from '@fluentui/svg-icons/icons/split_vertical_20_regular.svg?raw';
 	import splitHorizontalIcon from '@fluentui/svg-icons/icons/split_horizontal_20_regular.svg?raw';
-	import dismissIcon from '@fluentui/svg-icons/icons/dismiss_20_regular.svg?raw';
+	import dismissIcon from '@fluentui/svg-icons/icons/dismiss_12_regular.svg?raw';
 	import { closeSession, openSession, sessions } from '$lib/stores/sessions.svelte';
 	import { recordUse, type ProfileEntry } from '$lib/stores/profiles.svelte';
 	import { portsState, portUnavailable, refreshPorts } from '$lib/stores/ports.svelte';
@@ -729,6 +729,10 @@
 	.tb.close:hover {
 		background: var(--danger-bg);
 		color: var(--danger);
+	}
+	.tb.close :global(svg) {
+		width: 12px;
+		height: 12px;
 	}
 	.tb :global(svg) {
 		width: 20px;
