@@ -57,7 +57,7 @@ export function setColor(key: ColorKey, value: string) {
 	persistColors();
 }
 
-/** Drop custom colors for the current theme */
+/** Drop the custom colors for the current theme */
 export function resetColors() {
 	themeState.overrides[themeState.theme] = {};
 	persistColors();

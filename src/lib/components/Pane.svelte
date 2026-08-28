@@ -549,7 +549,7 @@
 		border-color: var(--active);
 	}
 	.pane.active .title {
-		color: var(--active);
+		color: var(--titlebar-active);
 	}
 	.pane.dragging {
 		opacity: 0.45;
@@ -563,13 +563,18 @@
 		display: flex;
 		align-items: center;
 		gap: 6px;
-		padding: 2px 6px 2px 10px;
-		background: var(--bg-elev);
-		border-bottom: 1px solid var(--border);
+		/* 1px, not the toolbar's 2px: this strip repeats once per tile and is
+		   mostly empty next to its title, so at equal height it reads heavier than
+		   the window bar. 31px against that bar's 33px evens the two out. */
+		padding: 1px 6px 1px 10px;
+		/* The bar's own tone set (--titlebar-*), which follows the theme */
+		background: var(--titlebar-bg);
+		border-bottom: 1px solid var(--titlebar-border);
 		flex-shrink: 0;
 		cursor: grab;
 	}
 	.tb.logging {
+		/* The bar follows the theme, so the recording tint does too */
 		color: var(--danger);
 	}
 	.multi {
@@ -577,7 +582,7 @@
 		align-items: center;
 		gap: 3px;
 		font-size: 0.7rem;
-		color: var(--fg-icon);
+		color: var(--titlebar-icon);
 		white-space: nowrap;
 		cursor: pointer;
 		margin-right: 2px;
@@ -692,8 +697,7 @@
 		flex: 0 1 auto;
 		max-width: 40%;
 		font-size: 0.85rem;
-		/* Same tone as the title-bar icons */
-		color: var(--fg-icon);
+		color: var(--titlebar-fg);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -703,7 +707,7 @@
 		max-width: none;
 	}
 	.title.muted {
-		color: var(--fg-faint);
+		color: var(--titlebar-faint);
 	}
 	.tb {
 		display: flex;
@@ -715,13 +719,12 @@
 		background: none;
 		border: none;
 		border-radius: 4px;
-		/* Same tone as the toolbar icons */
-		color: var(--fg-icon);
+		color: var(--titlebar-icon);
 		cursor: pointer;
 	}
 	.tb:hover {
-		background: var(--accent-soft);
-		color: var(--accent);
+		background: var(--titlebar-hover);
+		color: var(--titlebar-fg);
 	}
 	.tb.close:hover {
 		background: var(--danger-bg);

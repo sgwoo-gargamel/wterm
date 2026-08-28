@@ -22,6 +22,21 @@
 	];
 	/** Positive mixes toward white, negative toward black */
 	const LEVELS = [0.6, 0.35, 0, -0.3, -0.55];
+	/**
+	 * White and black have nowhere left to go in one direction — mixing them by
+	 * the levels above lands on the same cell three times over — so their columns
+	 * are written out as plain ramps instead. Both still run light at the top and
+	 * dark at the bottom like every other column, and neither repeats a tone the
+	 * grey columns already carry.
+	 */
+	const RAMPS: Record<string, string[]> = {
+		'#ffffff': ['#ffffff', '#f2f2f2', '#e0e0e0', '#cfcfcf', '#bdbdbd'],
+		'#000000': ['#666666', '#4d4d4d', '#333333', '#1a1a1a', '#000000']
+	};
+	// One row per level, so the grid can be laid out row by row
+	const ROWS = LEVELS.map((level, row) =>
+		BASES.map((base) => RAMPS[base]?.[row] ?? (level === 0 ? base : mix(base, level)))
+	);
 
 	const STANDARD = [
 		'#7f1d1d',
@@ -71,9 +86,8 @@
 		<div class="popover">
 			<span class="section">{t('color.theme')}</span>
 			<div class="grid">
-				{#each LEVELS as level (level)}
-					{#each BASES as base (base)}
-						{@const color = level === 0 ? base : mix(base, level)}
+				{#each ROWS as row, r (r)}
+					{#each row as color, c (c)}
 						<button
 							type="button"
 							class="cell"

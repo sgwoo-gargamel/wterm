@@ -7,6 +7,7 @@ export interface PersistedSettings {
 	locale?: 'ko' | 'en';
 	theme?: 'dark' | 'light';
 	themeColors?: unknown;
+	chromeColors?: unknown;
 	font?: unknown;
 	renderer?: 'webgl' | 'dom';
 	logDir?: string;

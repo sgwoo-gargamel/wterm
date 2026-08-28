@@ -39,11 +39,12 @@ export const XTERM_THEMES: Record<Theme, ITheme> = {
 	},
 	light: {
 		// Neutral gray instead of Windows' near-white layer tone (#f9f9f9):
-		// full-brightness white at terminal size is glaring; this keeps ~13:1
-		// against the foreground so sharpness doesn't suffer. Must stay in sync
-		// with --bg-panel (light) — the container padding shows that colour.
-		background: '#f0efed',
-		foreground: '#1b1b1b',
+		// white at terminal size glares, and near-black text on it fatigues the
+		// eyes. A soft gray with dark-gray text keeps ~10:1 — comfortable but
+		// still sharp. Must stay in sync with --bg-panel (light) — the container
+		// padding shows that colour.
+		background: '#e3e2df',
+		foreground: '#333333',
 		cursor: '#2563eb',
 		selectionBackground: '#cce0f9',
 		// VS Code light ANSI palette (terminal.ansi* defaults)

@@ -38,9 +38,14 @@
 	let historyIndex = $state(-1);
 	const noSend = $derived(sendDisabled ?? disabled);
 
-	// A box that goes dead while its panel is open takes the panel with it
+	// A box that goes dead takes its panel with it, and the half-typed line too:
+	// there is nothing left to send it to, so leaving it sitting in a disabled
+	// field is just residue — the next connection starts on an empty box
 	$effect(() => {
-		if (disabled) open = false;
+		if (!disabled) return;
+		open = false;
+		text = '';
+		historyIndex = -1;
 	});
 
 	function openHistory() {
@@ -218,11 +223,23 @@
 		flex: 1;
 		min-width: 0;
 	}
+	/* Sitting in the window title bar, this copy is that bar's omnibox: it takes
+	   its tones from the bar rather than from the theme's inputs */
 	.fill .field {
 		width: 100%;
 		min-width: 0;
+		background: var(--window-title-input-bg);
+		color: var(--window-title-input-fg);
+		border-color: var(--window-title-input-border);
 	}
-	/* In a title bar the input takes the width it is given */
+	.fill .field::placeholder {
+		color: var(--window-title-input-faint);
+	}
+	.fill .field:focus {
+		border-color: var(--window-title-active);
+	}
+	/* In a title bar the input takes the width it is given, and its tones from
+	   that bar rather than from the theme's inputs */
 	.compact {
 		width: 100%;
 	}
@@ -230,14 +247,26 @@
 		width: 100%;
 		height: 22px;
 		padding: 0 6px;
+		background: var(--titlebar-input-bg);
+		color: var(--titlebar-input-fg);
+		border-color: var(--titlebar-input-border);
+	}
+	.compact .field::placeholder {
+		color: var(--titlebar-input-faint);
+	}
+	.compact .field:focus {
+		border-color: var(--titlebar-active);
 	}
 	.send {
 		/* The widened input must not squeeze the label onto a second line */
 		flex-shrink: 0;
 		white-space: nowrap;
-		background: var(--primary);
-		color: var(--primary-fg);
-		border: 1px solid var(--primary);
+		/* This button only ever renders in the window title bar — the compact copy
+		   in a tile bar has none — so it wears that bar's tones. Primary blue was
+		   the one saturated thing on an otherwise grey bar and shouted for it. */
+		background: transparent;
+		color: var(--window-title-fg);
+		border: 1px solid var(--window-title-input-border);
 		border-radius: 5px;
 		padding: 3px 12px;
 		/* Toolbar caption scale — this button only ever shows next to them */
@@ -245,8 +274,8 @@
 		cursor: pointer;
 	}
 	.send:hover:not(:disabled) {
-		background: var(--primary-hover);
-		border-color: var(--primary-hover);
+		/* The same fill the toolbar's icon buttons take on hover */
+		background: var(--window-title-hover);
 	}
 	.send:disabled {
 		opacity: 0.45;

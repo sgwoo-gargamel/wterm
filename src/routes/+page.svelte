@@ -70,6 +70,7 @@
 			fallback: () => (themeState.theme === 'dark' ? '#6ea3ff' : '#2563eb')
 		}
 	];
+
 	import {
 		settingsState,
 		initSettings,
@@ -501,12 +502,13 @@
 				</label>
 				<span class="panel-section">{t('settings.colors')}</span>
 				{#each COLOR_FIELDS as field (field.key)}
+					{@const effective = themeState.overrides[themeState.theme][field.key] ?? field.fallback()}
 					<div class="color-row">
 						<span>{t(field.label)}</span>
-						<ColorPicker
-							value={themeState.overrides[themeState.theme][field.key] ?? field.fallback()}
-							onpick={(color) => setColor(field.key, color)}
-						/>
+						<span class="color-value">
+							<span class="mono">{effective.toLowerCase()}</span>
+							<ColorPicker value={effective} onpick={(color) => setColor(field.key, color)} />
+						</span>
 					</div>
 				{/each}
 				<div class="panel-buttons">
@@ -665,24 +667,57 @@
 		--popup-fg-muted: #8b93a1;
 		--popup-fg-faint: #5c6370;
 		--popup-danger: #e06c75;
+		/* Both title bars follow the theme: dark bars over dark terminals, light
+		   bars over light ones, so the window never splits into a bright band on
+		   top of a black pane. They stay one cool-grey family a step apart from
+		   each other — the window bar is the outermost, darkest step and the tile
+		   bars sit above it — with the light values in the block below. */
+		--titlebar-bg: #282c34;
+		--titlebar-fg: #d7dae0;
+		--titlebar-faint: #8b93a1;
+		--titlebar-icon: #a7aeba;
+		--titlebar-hover: #363b45;
+		/* The focused tile's title: gold, the one accent on these bars */
+		--titlebar-active: #e8c15a;
+		--titlebar-border: #3a3f4a;
+		/* The send box sitting in a tile bar belongs to the bar, not to the theme */
+		--titlebar-input-bg: #171a20;
+		--titlebar-input-fg: #d7dae0;
+		--titlebar-input-border: #3a3f4a;
+		--titlebar-input-faint: #6f7784;
+		--window-title-bg: #23262d;
+		/* The window title proper (the workspace name) */
+		--window-title-fg: #d7dae0;
+		--window-title-icon: #9aa3b0;
+		--window-title-faint: #7e8796;
+		--window-title-hover: #333944;
+		--window-title-active: #ffffff;
+		--window-title-border: #333944;
+		/* The send box, sitting in the bar the way an omnibox sits in browser chrome */
+		--window-title-input-bg: #171a20;
+		--window-title-input-fg: #d7dae0;
+		--window-title-input-border: #3a3f4a;
+		--window-title-input-faint: #6f7784;
 	}
 	:global(:root[data-theme='light']) {
 		color-scheme: light;
-		/* Windows 11 light palette, except the panel: neutral gray to cut the
-		   glare of near-white terminal areas. Keep in sync with the light xterm
-		   theme background in terminals.ts. */
-		--bg: #f3f3f3;
-		--bg-panel: #f0efed;
-		--bg-elev: #efefef;
-		--bg-input: #fbfbfb;
-		--accent-soft: #dceafb;
-		--accent-soft-hover: #cee0fa;
-		--border: #d9d9d9;
+		/* Pure white is reserved for text inputs, where crisp white reads as "type
+		   here"; the large surfaces (window, tiles, chrome) sit a step down on
+		   neutral grays so the window as a whole doesn't glare. Text is dark gray
+		   rather than near-black to keep the contrast comfortable. --bg-panel must
+		   stay in sync with the light xterm theme background in terminals.ts. */
+		--bg: #d6d5d2;
+		--bg-panel: #e3e2df;
+		--bg-elev: #d4d3d0;
+		--bg-input: #ffffff;
+		--accent-soft: #d3e0f0;
+		--accent-soft-hover: #c2d4ec;
+		--border: #c2c1be;
 		--border-accent: #7fa3e8;
-		--fg: #1b1b1b;
-		--fg-muted: #5d5d5d;
-		--fg-faint: #8a8a8a;
-		--fg-icon: #3a3a3a;
+		--fg: #333333;
+		--fg-muted: #62625f;
+		--fg-faint: #8d8d8a;
+		--fg-icon: #444442;
 		--accent: #2563eb;
 		--primary: #2b64d9;
 		--primary-hover: #3873ee;
@@ -693,7 +728,7 @@
 		--danger-bg-hover: #f6d2d6;
 		--ok: #0a7d33;
 		--active: #b3861a;
-		--overlay: rgba(238, 241, 246, 0.78);
+		--overlay: rgba(214, 213, 210, 0.78);
 		--shadow: rgba(30, 40, 60, 0.2);
 		--badge-serial-bg: #dff2e2;
 		--badge-serial-fg: #12722d;
@@ -701,6 +736,34 @@
 		--badge-ssh-fg: #1d4fb8;
 		--badge-telnet-bg: #f5e8d4;
 		--badge-telnet-fg: #8a5b16;
+		/* The light half of the two title bars; same roles as the dark block above.
+		   Both sit *below* the terminal ground (--bg-panel) rather than above it:
+		   near-white chrome around a soft-gray terminal is what glares, so the
+		   content stays the brightest surface and the bars frame it. For the same
+		   reason the send boxes here are a soft off-white, not the pure white the
+		   other inputs use. */
+		--titlebar-bg: #d5dae2;
+		--titlebar-fg: #1f2328;
+		--titlebar-faint: #5f6874;
+		--titlebar-icon: #4b525d;
+		--titlebar-hover: #c6ccd6;
+		--titlebar-active: #8a6d00;
+		--titlebar-border: #b8bfca;
+		--titlebar-input-bg: #e7eaf0;
+		--titlebar-input-fg: #1f2328;
+		--titlebar-input-border: #b8bfca;
+		--titlebar-input-faint: #79818f;
+		--window-title-bg: #dcdfe5;
+		--window-title-fg: #1f2328;
+		--window-title-icon: #4b525d;
+		--window-title-faint: #6b7382;
+		--window-title-hover: #cbd0d9;
+		--window-title-active: #1f2328;
+		--window-title-border: #bfc5cf;
+		--window-title-input-bg: #eef0f4;
+		--window-title-input-fg: #1f2328;
+		--window-title-input-border: #bfc5cf;
+		--window-title-input-faint: #79818f;
 	}
 	:global(html, body) {
 		margin: 0;
@@ -727,11 +790,16 @@
 	.toolbar {
 		display: flex;
 		align-items: center;
-		/* Flush on all sides — no frame, no border, no shadow */
-		padding: 4px 12px;
+		/* Flush on all sides — no frame, no shadow. No vertical padding either: the
+		   bar is exactly as tall as the outlined groups, and with the separator
+		   below that puts it at the tile title bars' height (both sit on the same
+		   28px control height) */
+		padding: 0 12px;
 		margin: 0;
-		background: var(--bg-elev);
+		background: var(--window-title-bg);
+		/* The separator under Chrome's toolbar, and the tile bars' bottom edge */
 		border: none;
+		border-bottom: 1px solid var(--window-title-border);
 		flex-shrink: 0;
 	}
 	.toolbar-body {
@@ -776,7 +844,7 @@
 	.logo {
 		font-weight: 700;
 		font-size: 1rem;
-		color: var(--accent);
+		color: var(--window-title-fg);
 		outline: none;
 		min-width: 40px;
 		max-width: 220px;
@@ -787,8 +855,8 @@
 		cursor: text;
 	}
 	.logo:focus {
-		background: var(--bg-input);
-		box-shadow: 0 0 0 1px var(--border-accent);
+		background: var(--window-title-input-bg);
+		box-shadow: 0 0 0 1px var(--window-title-input-border);
 	}
 	.caret :global(svg) {
 		width: 16px;
@@ -899,15 +967,16 @@
 		color: var(--danger);
 		background: var(--bg-input);
 	}
-	/* Toolbar groups: a caption plus that feature's controls, outlined together */
+	/* Toolbar groups: a caption plus that feature's controls. No outline — the
+	   caption and the gap to the next group are what separate them, the way
+	   Chrome's toolbar sections sit next to each other. The 2px padding keeps the
+	   bar at the tile title bars' height over the same 28px controls. */
 	.group {
 		display: flex;
 		align-items: center;
 		gap: 4px;
 		padding: 2px 8px;
 		margin-left: 8px;
-		border: 1px solid var(--border);
-		border-radius: 6px;
 		flex-shrink: 0;
 	}
 	/* The one group that stretches; the rest keep their natural width */
@@ -921,7 +990,7 @@
 		/* Same size as the tile title bar's "multi" caption so both toolbars read alike */
 		font-size: 0.7rem;
 		/* Same tone as the icons so the whole group reads as one unit */
-		color: var(--fg-icon);
+		color: var(--window-title-icon);
 		margin-right: 2px;
 		white-space: nowrap;
 	}
@@ -930,7 +999,7 @@
 		align-items: center;
 		gap: 4px;
 		font-size: 0.7rem;
-		color: var(--fg-icon);
+		color: var(--window-title-icon);
 		cursor: pointer;
 		white-space: nowrap;
 	}
@@ -939,13 +1008,13 @@
 		cursor: pointer;
 	}
 	.multi-check:hover {
-		color: var(--accent);
+		color: var(--window-title-active);
 	}
 	/* Borderless controls sized like the tile title-bar buttons */
 	.toolbar button {
 		background: none;
 		/* One tone for every toolbar control, matching the group captions */
-		color: var(--fg-icon);
+		color: var(--window-title-icon);
 		border: none;
 		border-radius: 4px;
 		padding: 2px 6px;
@@ -953,8 +1022,8 @@
 		cursor: pointer;
 	}
 	.toolbar button:hover {
-		background: var(--accent-soft);
-		color: var(--accent);
+		background: var(--window-title-hover);
+		color: var(--window-title-active);
 	}
 	.lang {
 		width: 30px;
@@ -986,7 +1055,8 @@
 		display: flex;
 		flex-shrink: 0;
 		align-self: stretch;
-		margin: -4px -12px -4px 4px;
+		/* Only the toolbar's side padding is left to cancel; it has no vertical one */
+		margin: 0 -12px 0 4px;
 	}
 	.win-controls button {
 		width: 46px;
@@ -997,8 +1067,11 @@
 		justify-content: center;
 	}
 	.win-controls svg {
-		width: 10px;
-		height: 10px;
+		/* 12px, not the Windows caption's 10px: the tile bar's Fluent 20px glyphs
+		   draw their mark across 12 of those 20 units, and these buttons sit
+		   directly above them at the same right edge */
+		width: 12px;
+		height: 12px;
 		fill: none;
 		stroke: currentColor;
 		stroke-width: 1;
@@ -1113,6 +1186,15 @@
 		justify-content: space-between;
 		font-size: 0.7rem;
 		color: var(--fg-muted);
+	}
+	.color-row .color-value {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.color-row .mono {
+		font-family: monospace;
+		color: var(--fg-faint);
 	}
 	.panel-buttons {
 		display: flex;
