@@ -1,11 +1,11 @@
 <script lang="ts">
-  // 진행 표시용 햄스터 휠 애니메이션 (docs/progress.html)
+  // Hamster wheel progress animation (docs/progress.html)
   type Props = {
-    /** false면 애니메이션을 멈춘 상태로 표시한다 (완료/취소/실패) */
+    /** false freezes the animation in place (done / cancelled / failed) */
     running?: boolean;
-    /** 실패 표시: 회색조 처리 */
+    /** Failure state: rendered in grayscale */
     failed?: boolean;
-    /** 전체 크기 기준값. 휠 지름은 이 값의 12배가 된다 (10px → 120px) */
+    /** Base size. The wheel diameter is 12× this value (10px → 120px) */
     size?: string;
   };
 
@@ -45,7 +45,7 @@
     height: 12em;
   }
 
-  /* 진행이 끝나면(완료/취소/실패) 애니메이션 정지 */
+  /* Stop the animation once progress ends (done / cancelled / failed) */
   .wheel-and-hamster:not(.is-running) div {
     animation-play-state: paused;
   }
