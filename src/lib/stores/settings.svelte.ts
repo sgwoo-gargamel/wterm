@@ -7,14 +7,14 @@ export interface FontSettings {
 }
 
 export const DEFAULT_FONT: FontSettings = {
-	family: '"D2Coding", Consolas, monospace',
+	family: '"Consolas", monospace',
 	size: 14,
 	weight: 400
 };
 
 const VALID_WEIGHTS = [300, 400, 500, 700];
 
-/** webgl = fast (grayscale AA), dom = ClearType-sharp but slow on heavy output */
+/** dom (default) = ClearType-sharp but slow on heavy output, webgl = fast (grayscale AA) */
 export type RendererKind = 'webgl' | 'dom';
 
 export const settingsState = $state<{
@@ -23,7 +23,7 @@ export const settingsState = $state<{
 	logDir: string;
 }>({
 	font: { ...DEFAULT_FONT },
-	renderer: 'webgl',
+	renderer: 'dom',
 	logDir: ''
 });
 

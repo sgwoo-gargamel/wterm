@@ -496,8 +496,8 @@
 							applyRendererToAll();
 						}}
 					>
-						<option value="webgl">{t('settings.renderer.webgl')}</option>
 						<option value="dom">{t('settings.renderer.dom')}</option>
+						<option value="webgl">{t('settings.renderer.webgl')}</option>
 					</select>
 				</label>
 				<span class="panel-section">{t('settings.colors')}</span>
