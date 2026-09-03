@@ -29,7 +29,13 @@ export function onWslShells(handler: (shells: ShellInfo[]) => void): Promise<Unl
 export type OutputEvent =
 	| { type: 'data'; bytes: number[] }
 	| { type: 'connected' }
-	| { type: 'disconnected'; reason: string };
+	| { type: 'disconnected'; reason: string }
+	| { type: 'transfer_start'; name: string; size: number }
+	| { type: 'transfer_progress'; sent: number; size: number }
+	| { type: 'transfer_done'; name: string }
+	// reason: stable token (cancelled, remote-cancelled, handshake-timeout,
+	// transfer-timeout) or raw error text
+	| { type: 'transfer_failed'; reason: string };
 
 export interface PortInfo {
 	name: string;
@@ -71,6 +77,15 @@ export function openSession(
 
 export function writeSession(id: string, data: Uint8Array): Promise<void> {
 	return invoke('session_write', { id, data: Array.from(data) });
+}
+
+/** Serial only: send a local file to the target via YMODEM (receiver must be running) */
+export function ymodemSend(id: string, path: string): Promise<void> {
+	return invoke('session_ymodem_send', { id, path });
+}
+
+export function ymodemCancel(id: string): Promise<void> {
+	return invoke('session_ymodem_cancel', { id });
 }
 
 export function resizeSession(id: string, cols: number, rows: number): Promise<void> {

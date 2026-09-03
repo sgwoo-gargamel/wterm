@@ -157,6 +157,7 @@ async fn run(
                         let _ = write_half.close().await;
                         break "closed".to_string();
                     }
+                    Some(_) => {} // YMODEM is serial-only
                 }
             }
         }

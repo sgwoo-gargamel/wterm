@@ -58,6 +58,8 @@ pub fn run() {
             commands::list_shells,
             commands::session_open,
             commands::session_write,
+            commands::session_ymodem_send,
+            commands::session_ymodem_cancel,
             commands::session_resize,
             commands::session_close,
             commands::session_start_log,

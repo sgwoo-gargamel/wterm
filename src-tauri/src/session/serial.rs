@@ -2,7 +2,7 @@ use serial2_tokio::SerialPort;
 use tauri::ipc::Channel;
 use tokio::sync::mpsc;
 
-use super::{OutputEvent, SessionCleanup, SessionInput, SessionLogger};
+use super::{ymodem, OutputEvent, SessionCleanup, SessionInput, SessionLogger};
 use crate::error::Result;
 
 /// Serial session on serial2-tokio. Its overlapped I/O on Windows lets reads
@@ -48,6 +48,17 @@ pub fn spawn(
                             break e.to_string();
                         }
                     }
+                    // Runs the whole transfer inline: the protocol owns the
+                    // port until it finishes, so its bytes never reach the
+                    // terminal or the logger
+                    Some(SessionInput::YmodemSend { path }) => {
+                        match ymodem::send(&port, &mut rx, &output, &path).await {
+                            ymodem::After::Continue => {}
+                            ymodem::After::End(reason) => break reason,
+                        }
+                    }
+                    // No transfer is running when it reaches this loop
+                    Some(SessionInput::YmodemCancel) => {}
                     Some(SessionInput::Resize { .. }) => {} // not applicable to serial
                     Some(SessionInput::Close) | None => break "closed".to_string(),
                 },

@@ -274,6 +274,23 @@ pub async fn session_write(
     state.send(&id, SessionInput::Data(data)).await
 }
 
+/// Serial only: push a local file to the target over YMODEM.
+/// The receiver (rb, loady, …) must already be running on the target.
+#[tauri::command]
+pub async fn session_ymodem_send(
+    state: State<'_, SessionManager>,
+    id: String,
+    path: String,
+) -> Result<()> {
+    state.send(&id, SessionInput::YmodemSend { path }).await
+}
+
+/// Abort the YMODEM transfer in progress, if any
+#[tauri::command]
+pub async fn session_ymodem_cancel(state: State<'_, SessionManager>, id: String) -> Result<()> {
+    state.send(&id, SessionInput::YmodemCancel).await
+}
+
 #[tauri::command]
 pub async fn session_resize(
     state: State<'_, SessionManager>,

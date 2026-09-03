@@ -3,6 +3,7 @@ pub mod logger;
 pub mod serial;
 pub mod ssh;
 pub mod telnet;
+mod ymodem;
 
 pub use logger::SessionLogger;
 
@@ -48,6 +49,13 @@ pub enum OutputEvent {
     Data { bytes: Vec<u8> },
     Connected,
     Disconnected { reason: String },
+    /// A YMODEM transfer began (after the local file was read successfully)
+    TransferStart { name: String, size: u64 },
+    TransferProgress { sent: u64, size: u64 },
+    TransferDone { name: String },
+    /// `reason` is a stable token (cancelled, remote-cancelled,
+    /// handshake-timeout, transfer-timeout) or raw error text
+    TransferFailed { reason: String },
 }
 
 /// Frontend → session input
@@ -55,6 +63,11 @@ pub enum OutputEvent {
 pub enum SessionInput {
     Data(Vec<u8>),
     Resize { cols: u16, rows: u16 },
+    /// Serial only: send the file at `path` to the target via YMODEM.
+    /// The target's receiver (rb, loady, …) must already be running.
+    YmodemSend { path: String },
+    /// Abort the YMODEM transfer in progress, if any
+    YmodemCancel,
     Close,
 }
 

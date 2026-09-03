@@ -100,6 +100,7 @@ async fn session_loop(
                     Some(SessionInput::Close) | None => {
                         return Ok("closed".into());
                     }
+                    Some(_) => {} // YMODEM is serial-only
                 }
             }
         }

@@ -7,6 +7,16 @@ import { refreshPorts } from './ports.svelte';
 
 export type SessionStatus = 'connected' | 'disconnected';
 
+/** State of a YMODEM transfer shown by the pane overlay */
+export interface TransferState {
+	name: string;
+	size: number;
+	sent: number;
+	status: 'active' | 'done' | 'failed';
+	/** Stable token or raw error text when status is 'failed' */
+	reason: string;
+}
+
 /** Frontend state for one backend session. Output received before the terminal mounts is buffered. */
 export class Session {
 	id = '';
@@ -19,6 +29,8 @@ export class Session {
 	/** Last known terminal size, for features that need it (e.g. serial stty) */
 	cols = 80;
 	rows = 24;
+	/** Active/finished YMODEM transfer, null when the overlay is dismissed */
+	transfer = $state<TransferState | null>(null);
 
 	private sink: ((data: Uint8Array) => void) | null = null;
 	private buffer: Uint8Array[] = [];
@@ -36,8 +48,33 @@ export class Session {
 		} else if (ev.type === 'disconnected') {
 			this.status = 'disconnected';
 			this.reason = ev.reason;
+			// A transfer that died with the session is reported by the
+			// disconnect overlay; don't stack the transfer overlay on top
+			this.dismissTransfer();
+		} else if (ev.type === 'transfer_start') {
+			this.transfer = { name: ev.name, size: ev.size, sent: 0, status: 'active', reason: '' };
+		} else if (ev.type === 'transfer_progress') {
+			if (this.transfer) {
+				this.transfer.sent = ev.sent;
+				this.transfer.size = ev.size;
+			}
+		} else if (ev.type === 'transfer_done') {
+			// Stays up until the user clicks it away, like the connect popup
+			if (this.transfer) {
+				this.transfer.status = 'done';
+				this.transfer.sent = this.transfer.size;
+			}
+		} else if (ev.type === 'transfer_failed') {
+			// Can arrive without transfer_start (the local file failed to read)
+			if (!this.transfer) {
+				this.transfer = { name: '', size: 0, sent: 0, status: 'failed', reason: ev.reason };
+			} else {
+				this.transfer.status = 'failed';
+				this.transfer.reason = ev.reason;
+			}
 		}
 	}
+
 
 	/** Attach the output sink when the terminal view mounts and flush the buffer */
 	attach(sink: (data: Uint8Array) => void) {
@@ -57,6 +94,20 @@ export class Session {
 
 	write(data: Uint8Array) {
 		if (this.status === 'connected' && this.id) void ipc.writeSession(this.id, data);
+	}
+
+	/** Serial only: push a local file to the target over YMODEM */
+	ymodemSend(path: string) {
+		if (this.status === 'connected' && this.id) void ipc.ymodemSend(this.id, path);
+	}
+
+	ymodemCancel() {
+		if (this.id) void ipc.ymodemCancel(this.id);
+	}
+
+	/** Close the transfer overlay */
+	dismissTransfer() {
+		this.transfer = null;
 	}
 
 	resize(cols: number, rows: number) {

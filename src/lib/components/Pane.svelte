@@ -17,6 +17,8 @@
 	import { settingsState } from '$lib/stores/settings.svelte';
 	import { multiSend, toggleTarget } from '$lib/stores/multisend.svelte';
 	import resizeIcon from '@fluentui/svg-icons/icons/resize_20_regular.svg?raw';
+	import downloadIcon from '@fluentui/svg-icons/icons/arrow_download_20_regular.svg?raw';
+	import { open } from '@tauri-apps/plugin-dialog';
 	import broomIcon from '@fluentui/svg-icons/icons/broom_20_regular.svg?raw';
 	import saveIcon from '@fluentui/svg-icons/icons/save_20_regular.svg?raw';
 	import splitVerticalIcon from '@fluentui/svg-icons/icons/split_vertical_20_regular.svg?raw';
@@ -180,6 +182,40 @@
 	function sendStty() {
 		if (!session) return;
 		session.write(new TextEncoder().encode(`stty rows ${session.rows} cols ${session.cols}\r`));
+	}
+
+	/** Serial only: pick a local file and push it to the target over YMODEM */
+	async function ymodemPick() {
+		if (!session || session.transfer) return;
+		const path = await open({ multiple: false, directory: false });
+		if (typeof path === 'string') session.ymodemSend(path);
+	}
+
+	/** Click on the transfer popup: cancel while sending, dismiss once finished */
+	function dismissTransfer() {
+		if (!session?.transfer) return;
+		if (session.transfer.status === 'active') session.ymodemCancel();
+		else session.dismissTransfer();
+	}
+
+	let xferEl = $state<HTMLElement | null>(null);
+
+	// Same focus hand-off as the connect popup: Enter/Esc reach it without a
+	// click, and focus returns to the previous element when it goes away
+	$effect(() => {
+		if (!session?.transfer || !xferEl) return;
+		const previous = document.activeElement as HTMLElement | null;
+		xferEl.focus();
+		if (!previous || previous === xferEl) return;
+		return () => {
+			if (previous.isConnected) previous.focus();
+		};
+	});
+
+	function fmtBytes(n: number): string {
+		if (n >= 1048576) return `${(n / 1048576).toFixed(1)} MB`;
+		if (n >= 1024) return `${(n / 1024).toFixed(1)} KB`;
+		return `${n} B`;
 	}
 
 	function reconnect() {
@@ -369,6 +405,16 @@
 				<button type="button" class="tb" title={t('pane.sendSize')} onclick={sendStty}>
 					{@html resizeIcon}
 				</button>
+				<!-- YMODEM upload to the target (its receiver must already be running) -->
+				<button
+					type="button"
+					class="tb"
+					title={t('ymodem.send')}
+					disabled={!!session.transfer}
+					onclick={ymodemPick}
+				>
+					{@html downloadIcon}
+				</button>
 			{/if}
 			<!-- Wipe the screen and scrollback of this tile's terminal -->
 			<button type="button" class="tb" title={t('pane.clear')} onclick={() => clearTerminal(session.id)}>
@@ -465,6 +511,59 @@
 			{#key session.id}
 				<TerminalView {session} active={isActive} onfocused={activate} />
 			{/key}
+			{#if session.transfer}
+				{@const xfer = session.transfer}
+				{@const pct = xfer.size ? Math.min(100, Math.floor((xfer.sent / xfer.size) * 100)) : 0}
+				<!-- Click anywhere (or on the hamster): cancels while sending, dismisses once finished -->
+				<div
+					class="progress-overlay"
+					role="button"
+					tabindex="0"
+					bind:this={xferEl}
+					aria-label={xfer.status === 'active' ? t('progress.cancelHint') : t('progress.closeHint')}
+					onclick={dismissTransfer}
+					onkeydown={(e) => {
+						if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+							e.preventDefault();
+							dismissTransfer();
+						}
+					}}
+				>
+					<div class="progress-card">
+						<HamsterWheel
+							running={xfer.status === 'active'}
+							failed={xfer.status === 'failed'}
+							size="9px"
+						/>
+						<p class="progress-title" class:failed={xfer.status === 'failed'}>
+							{xfer.status === 'done'
+								? t('ymodem.done')
+								: xfer.status === 'failed'
+									? t('ymodem.failed')
+									: xfer.sent === 0
+										? t('ymodem.waiting')
+										: t('ymodem.sending')}
+						</p>
+						{#if xfer.name}<p class="xfer-name">{xfer.name}</p>{/if}
+						<div class="xfer-bar">
+							<div
+								class="xfer-fill"
+								class:failed={xfer.status === 'failed'}
+								style="width: {xfer.status === 'done' ? 100 : pct}%"
+							></div>
+						</div>
+						<p class="progress-detail">{fmtBytes(xfer.sent)} / {fmtBytes(xfer.size)} ({pct}%)</p>
+						{#if xfer.status === 'failed' && xfer.reason}
+							<p class="xfer-reason">{translateReason(xfer.reason)}</p>
+						{:else if xfer.status === 'active' && xfer.sent === 0}
+							<p class="progress-detail">{t('ymodem.waitingHint')}</p>
+						{/if}
+						<p class="progress-hint">
+							{xfer.status === 'active' ? t('progress.cancelHint') : t('progress.closeHint')}
+						</p>
+					</div>
+				</div>
+			{/if}
 			{#if session.status === 'disconnected'}
 				<div class="overlay">
 					<p class="reason">{session.reason ? translateReason(session.reason) : t('reason.closed')}</p>
@@ -740,6 +839,14 @@
 		fill: currentColor;
 		display: block;
 	}
+	.tb:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
+	.tb:disabled:hover {
+		background: none;
+		color: var(--titlebar-icon);
+	}
 	.term-wrap {
 		position: relative;
 		flex: 1;
@@ -772,6 +879,40 @@
 		margin: 0;
 		padding: 0 1rem;
 		text-align: center;
+	}
+	/* --- YMODEM transfer card (rides the connect popup's card styles) --- */
+	.xfer-name {
+		margin: 0;
+		max-width: 100%;
+		font-size: 0.78rem;
+		color: var(--popup-fg-muted);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.xfer-bar {
+		width: 100%;
+		height: 8px;
+		background: var(--bg-input);
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		overflow: hidden;
+	}
+	.xfer-fill {
+		height: 100%;
+		background: var(--accent);
+		transition: width 0.15s linear;
+	}
+	.xfer-fill.failed {
+		background: var(--danger);
+	}
+	.xfer-reason {
+		margin: 0;
+		max-width: 320px;
+		font-size: 0.76rem;
+		color: var(--popup-danger);
+		text-align: center;
+		word-break: break-word;
 	}
 	.actions {
 		display: flex;
