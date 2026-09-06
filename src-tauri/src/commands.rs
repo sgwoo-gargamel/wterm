@@ -241,7 +241,31 @@ pub fn list_shells(app: AppHandle) -> Vec<ShellInfo> {
             label: "Command Prompt".into(),
             command: "cmd.exe".into(),
         },
+        // PowerShell with the project's `.venv` activated. The start directory
+        // is the project folder, so the relative path resolves there. Process
+        // scope RemoteSigned lets the local Activate.ps1 run under the default
+        // Restricted policy without touching the user's machine-wide setting.
+        ShellInfo {
+            label: "Python venv".into(),
+            command: "powershell.exe -NoLogo -ExecutionPolicy RemoteSigned -NoExit -Command \". .\\.venv\\Scripts\\Activate.ps1\"".into(),
+        },
     ]
+}
+
+/// Whether `dir` holds a venv the "Python venv" shell can activate, i.e.
+/// `.venv\Scripts\Activate.ps1` exists. Lets the form refuse a folder up front
+/// instead of opening a shell that only prints a script-not-found error.
+#[tauri::command(async)]
+pub fn venv_exists(dir: String) -> bool {
+    let dir = dir.trim();
+    if dir.is_empty() {
+        return false;
+    }
+    std::path::Path::new(dir)
+        .join(".venv")
+        .join("Scripts")
+        .join("Activate.ps1")
+        .is_file()
 }
 
 #[cfg(not(windows))]

@@ -10,7 +10,7 @@ Tauri 2 (Rust) + SvelteKit + xterm.js 로 만들어졌습니다.
 - **시리얼** — 포트 자동 감지(사용 중인 포트는 회색 처리), baud rate 선택 또는 직접 입력
 - **SSH** — `~/.ssh` 키 인증을 먼저 시도하고, 실패하면 비밀번호로 전환 (비밀번호 없는 계정도 접속 가능). 비밀번호는 저장하지 않습니다
 - **Telnet** — IAC 옵션 협상(ECHO/SGA/NAWS/BINARY/TERMINAL-TYPE) 지원, 로그인 프롬프트에 사용자 ID 자동 입력
-- **로컬** — 설치된 WSL 배포판, PowerShell, 명령 프롬프트를 ConPTY로 실행. PowerShell/cmd는 시작 위치를 지정할 수 있습니다
+- **로컬** — 설치된 WSL 배포판, PowerShell, 명령 프롬프트를 ConPTY로 실행. PowerShell/cmd는 시작 위치를 지정할 수 있습니다. **Python venv**는 시작 위치(프로젝트 폴더)의 `.venv\Scripts\Activate.ps1`을 실행한 PowerShell을 엽니다
 
 **화면**
 

@@ -56,6 +56,7 @@ pub fn run() {
             commands::list_serial_ports,
             commands::list_fonts,
             commands::list_shells,
+            commands::venv_exists,
             commands::session_open,
             commands::session_write,
             commands::session_ymodem_send,

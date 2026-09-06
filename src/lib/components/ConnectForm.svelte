@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import HamsterWheel from './HamsterWheel.svelte';
-	import { type Profile } from '$lib/ipc';
+	import { isVenvCommand, venvExists, type Profile } from '$lib/ipc';
 	import { lastState, profilesState } from '$lib/stores/profiles.svelte';
 	import { portsState, refreshPorts } from '$lib/stores/ports.svelte';
 	import { shellsState, loadShells } from '$lib/stores/shells.svelte';
@@ -32,6 +32,30 @@
 	let shellCommand = $state('');
 	let shellCwd = $state('');
 	const isWsl = $derived(/wsl/i.test(shellCommand));
+	// The venv shell activates `.venv` relative to the start directory, so the
+	// directory is the project folder and cannot be left to default to home
+	const isVenv = $derived(isVenvCommand(shellCommand));
+	/** The start directory has been checked and holds `.venv\Scripts\Activate.ps1` */
+	let venvOk = $state(false);
+	/** Why the venv shell cannot open in the chosen directory, or null */
+	let venvIssue = $state<MessageKey | null>(null);
+	// Re-checked on every change of the directory; the counter discards answers
+	// to a path the user has already typed past
+	let venvCheckSeq = 0;
+	$effect(() => {
+		const dir = isVenv ? shellCwd.trim() : '';
+		const seq = ++venvCheckSeq;
+		venvOk = false;
+		venvIssue = null;
+		if (!dir) return;
+		venvExists(dir)
+			.catch(() => false)
+			.then((exists) => {
+				if (seq !== venvCheckSeq) return;
+				venvOk = exists;
+				venvIssue = exists ? null : 'form.venvMissing';
+			});
+	});
 	// The selection is made once, from whichever shells arrived first, and then
 	// left alone. Following the list instead would re-select when the WSL entries
 	// land a moment later, and the visible jump reads as a flicker.
@@ -215,7 +239,7 @@
 
 	const canSubmit = $derived.by(() => {
 		if (busy) return false;
-		if (kind === 'local') return shellCommand.trim() !== '';
+		if (kind === 'local') return shellCommand.trim() !== '' && (!isVenv || venvOk);
 		// Connecting to an unplugged or busy port only fails later, with a popup
 		if (kind === 'serial') return port.trim() !== '' && !!baudRate && baudRate > 0 && !portIssue;
 		if (kind === 'ssh') return host.trim() !== '' && netPort > 0 && username.trim() !== '';
@@ -393,7 +417,11 @@
 					bind:value={shellCwd}
 					spellcheck="false"
 					disabled={isWsl}
-					placeholder={isWsl ? t('form.startDirWsl') : t('form.startDirHome')}
+					placeholder={isWsl
+						? t('form.startDirWsl')
+						: isVenv
+							? t('form.startDirVenv')
+							: t('form.startDirHome')}
 				/>
 				<button
 					type="button"
@@ -406,6 +434,10 @@
 				</button>
 			</span>
 		</label>
+		<!-- Says why the connect button is off for the venv shell -->
+		{#if venvIssue}
+			<p class="port-issue">{t(venvIssue)}</p>
+		{/if}
 		<!-- Ghost row keeps the form height equal to the other tabs -->
 		<label class="ghost" aria-hidden="true">
 			<span>&nbsp;</span>

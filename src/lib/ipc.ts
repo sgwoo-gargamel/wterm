@@ -26,6 +26,11 @@ export function onWslShells(handler: (shells: ShellInfo[]) => void): Promise<Unl
 	return listen<ShellInfo[]>('wsl-shells', (ev) => handler(ev.payload));
 }
 
+/** Whether `dir` contains `.venv\Scripts\Activate.ps1` */
+export function venvExists(dir: string): Promise<boolean> {
+	return invoke<boolean>('venv_exists', { dir });
+}
+
 export type OutputEvent =
 	| { type: 'data'; bytes: number[] }
 	| { type: 'connected' }
@@ -127,6 +132,7 @@ export function logBaseName(profile: Profile): string {
 			// `wsl.exe -d "Ubuntu-22.04"` → wsl-Ubuntu-22.04, `cmd.exe` → local-cmd
 			const distro = /-d\s+"?([^"]+)"?/.exec(profile.command)?.[1];
 			if (distro) return safe(`wsl-${distro}`);
+			if (isVenvCommand(profile.command)) return 'local-venv';
 			const program = profile.command.split(/\s+/)[0].replace(/\.exe$/i, '');
 			return safe(`local-${program}`);
 		}
@@ -142,10 +148,16 @@ export function logTimestamp(d = new Date()): string {
 	);
 }
 
+/** The "Python venv" shell: PowerShell that sources `.venv\Scripts\Activate.ps1` */
+export function isVenvCommand(command: string): boolean {
+	return /Activate\.ps1/i.test(command);
+}
+
 /** Friendly name for a local shell command line */
 function shellName(command: string): string {
 	const distro = /-d\s+"?([^"]+)"?/.exec(command)?.[1];
 	if (distro) return `WSL · ${distro}`;
+	if (isVenvCommand(command)) return 'Python venv';
 	if (/^powershell/i.test(command)) return 'PowerShell';
 	if (/^cmd/i.test(command)) return 'Command Prompt';
 	return command;
