@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { Profile } from './ipc';
+import type { WindowState } from './windowstate';
 import { reportSaveFailure, clearSaveFailure } from './stores/savestatus.svelte';
 
 /** Everything wterm remembers, stored as one JSON document */
@@ -16,6 +17,7 @@ export interface PersistedSettings {
 	last_type?: Profile['type'] | null;
 	multi_history?: string[];
 	workspaces?: unknown[];
+	window?: WindowState;
 }
 
 let data: PersistedSettings = {};

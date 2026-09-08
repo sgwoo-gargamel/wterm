@@ -3,6 +3,7 @@
 	import TileNode from '$lib/components/TileNode.svelte';
 	import { listFonts, appVersion, type VersionInfo } from '$lib/ipc';
 	import { initPersist } from '$lib/persist';
+	import { initWindowState } from '$lib/windowstate';
 	import Pane from '$lib/components/Pane.svelte';
 	import ColorPicker from '$lib/components/ColorPicker.svelte';
 	import { layoutState, addTile, closePane, paneById } from '$lib/stores/layout.svelte';
@@ -165,6 +166,7 @@
 			loadProfiles();
 			initSendHistory();
 			initWorkspaces();
+			void initWindowState();
 		});
 		void appVersion().then((v) => (version = v));
 

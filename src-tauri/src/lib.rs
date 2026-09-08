@@ -44,6 +44,10 @@ pub fn run() {
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_title(&window_title());
+                // The window starts hidden (see tauri.conf.json) so the saved
+                // position is applied before anything is painted
+                settings::restore_window(app.handle(), &window);
+                let _ = window.show();
             }
             Ok(())
         })
