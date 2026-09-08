@@ -1,17 +1,20 @@
 import { SvelteMap } from 'svelte/reactivity';
 import * as ipc from '$lib/ipc';
-import type { OutputEvent, Profile } from '$lib/ipc';
+import type { OutputEvent, Profile, TransferProtocol } from '$lib/ipc';
 import { disposeTerminal } from '$lib/terminals';
 import { multiSend } from './multisend.svelte';
 import { refreshPorts } from './ports.svelte';
 
 export type SessionStatus = 'connected' | 'disconnected';
 
-/** State of a YMODEM transfer shown by the pane overlay */
+/** State of an XMODEM/YMODEM transfer shown by the pane overlay */
 export interface TransferState {
+	protocol: TransferProtocol;
 	name: string;
 	size: number;
 	sent: number;
+	/** The receiver has answered the handshake; false while still waiting for it */
+	handshaked: boolean;
 	status: 'active' | 'done' | 'failed';
 	/** Stable token or raw error text when status is 'failed' */
 	reason: string;
@@ -29,8 +32,10 @@ export class Session {
 	/** Last known terminal size, for features that need it (e.g. serial stty) */
 	cols = 80;
 	rows = 24;
-	/** Active/finished YMODEM transfer, null when the overlay is dismissed */
+	/** Active/finished XMODEM/YMODEM transfer, null when the overlay is dismissed */
 	transfer = $state<TransferState | null>(null);
+	/** Protocol of the last requested transfer, for events that arrive before/without transfer_start */
+	private transferProtocol: TransferProtocol = 'ymodem';
 
 	private sink: ((data: Uint8Array) => void) | null = null;
 	private buffer: Uint8Array[] = [];
@@ -52,7 +57,17 @@ export class Session {
 			// disconnect overlay; don't stack the transfer overlay on top
 			this.dismissTransfer();
 		} else if (ev.type === 'transfer_start') {
-			this.transfer = { name: ev.name, size: ev.size, sent: 0, status: 'active', reason: '' };
+			this.transfer = {
+				protocol: this.transferProtocol,
+				name: ev.name,
+				size: ev.size,
+				sent: 0,
+				handshaked: false,
+				status: 'active',
+				reason: ''
+			};
+		} else if (ev.type === 'transfer_handshake') {
+			if (this.transfer) this.transfer.handshaked = true;
 		} else if (ev.type === 'transfer_progress') {
 			if (this.transfer) {
 				this.transfer.sent = ev.sent;
@@ -67,7 +82,15 @@ export class Session {
 		} else if (ev.type === 'transfer_failed') {
 			// Can arrive without transfer_start (the local file failed to read)
 			if (!this.transfer) {
-				this.transfer = { name: '', size: 0, sent: 0, status: 'failed', reason: ev.reason };
+				this.transfer = {
+					protocol: this.transferProtocol,
+					name: '',
+					size: 0,
+					sent: 0,
+					handshaked: false,
+					status: 'failed',
+					reason: ev.reason
+				};
 			} else {
 				this.transfer.status = 'failed';
 				this.transfer.reason = ev.reason;
@@ -96,13 +119,20 @@ export class Session {
 		if (this.status === 'connected' && this.id) void ipc.writeSession(this.id, data);
 	}
 
-	/** Serial only: push a local file to the target over YMODEM */
-	ymodemSend(path: string) {
-		if (this.status === 'connected' && this.id) void ipc.ymodemSend(this.id, path);
+	/** Serial only: hold port input while the file dialog is open (see ipc.transferPrepare) */
+	transferPrepare() {
+		if (this.status === 'connected' && this.id) void ipc.transferPrepare(this.id);
 	}
 
-	ymodemCancel() {
-		if (this.id) void ipc.ymodemCancel(this.id);
+	/** Serial only: push a local file to the target over XMODEM/YMODEM */
+	transferSend(protocol: TransferProtocol, path: string) {
+		if (this.status !== 'connected' || !this.id) return;
+		this.transferProtocol = protocol;
+		void ipc.transferSend(this.id, protocol, path);
+	}
+
+	transferCancel() {
+		if (this.id) void ipc.transferCancel(this.id);
 	}
 
 	/** Close the transfer overlay */

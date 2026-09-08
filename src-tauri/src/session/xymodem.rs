@@ -8,6 +8,16 @@ use tokio::time::Instant;
 
 use super::{OutputEvent, SessionInput};
 
+/// Which flavour of the XMODEM family to speak
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Protocol {
+    /// Bare blocks only: 1K blocks (XMODEM-1K) when the receiver asks for
+    /// CRC, 128-byte blocks for an old checksum-only receiver
+    Xmodem,
+    /// Batch mode: file-name header block, 1K data blocks, empty terminator
+    Ymodem,
+}
+
 const SOH: u8 = 0x01; // 128-byte block
 const STX: u8 = 0x02; // 1024-byte block
 const EOT: u8 = 0x04;
@@ -17,8 +27,8 @@ const CAN: u8 = 0x18;
 const CRC: u8 = b'C'; // receiver requests CRC-16 mode
 const SUB: u8 = 0x1a; // padding for the last partial block
 
-/// The user is expected to have started the receiver (rb/loady) already, but
-/// give them room to notice the overlay and cancel if they forgot.
+/// The user is expected to have started the receiver (rx/rb, loadx/loady)
+/// already, but give them room to notice the overlay and cancel if they forgot.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(60);
 /// Per-block reply timeout. Receivers answer within a second normally; a slow
 /// flash write on the target is the only legitimate reason to wait longer.
@@ -27,6 +37,11 @@ const RETRIES: u32 = 10;
 /// Standard ZMODEM/YMODEM abort: CANs to stop the receiver, BSs to erase them
 /// from the line in case it already dropped back to a shell prompt.
 const ABORT: [u8; 10] = [CAN, CAN, CAN, CAN, CAN, 0x08, 0x08, 0x08, 0x08, 0x08];
+
+/// Receiver poll byte: 'C' asks for CRC-16 blocks, NAK for 8-bit checksum
+pub fn is_poll(b: u8) -> bool {
+    b == CRC || b == NAK
+}
 
 /// What the serial session loop should do once the transfer attempt is over
 pub enum After {
@@ -50,13 +65,18 @@ enum Fail {
     Closed,
 }
 
-/// Send `path` over the serial port as a single-file YMODEM batch.
-/// Runs inline in the session task so protocol bytes never reach the terminal.
+/// Send `path` over the serial port as a plain XMODEM file or a single-file
+/// YMODEM batch. Runs inline in the session task so protocol bytes never
+/// reach the terminal. `poll` is a receiver poll byte the session loop
+/// already saw (held back during the file dialog); it satisfies the opening
+/// handshake so the transfer needs no wait for the receiver's next retry.
 pub async fn send(
     port: &SerialPort,
     rx: &mut mpsc::Receiver<SessionInput>,
     output: &Channel<OutputEvent>,
     path: &str,
+    protocol: Protocol,
+    poll: Option<u8>,
 ) -> After {
     let name = std::path::Path::new(path)
         .file_name()
@@ -81,9 +101,9 @@ pub async fn send(
         port,
         rx,
         output,
-        pending: VecDeque::new(),
+        pending: poll.into_iter().collect(),
     };
-    match run(&mut x, &name, &data).await {
+    match run(&mut x, protocol, &name, &data).await {
         Ok(()) => {
             let _ = output.send(OutputEvent::TransferDone { name });
             After::Continue
@@ -105,26 +125,33 @@ pub async fn send(
     }
 }
 
-async fn run(x: &mut Xfer<'_>, name: &str, data: &[u8]) -> Result<(), Fail> {
+async fn run(x: &mut Xfer<'_>, protocol: Protocol, name: &str, data: &[u8]) -> Result<(), Fail> {
     // The receiver polls its mode byte until the sender shows up
     let crc = x.wait_handshake(HANDSHAKE_TIMEOUT).await?;
+    let _ = x.output.send(OutputEvent::TransferHandshake);
 
-    // Block 0: file name NUL decimal-size, zero-padded (rb also appends mtime
-    // and mode, but every receiver treats those as optional)
-    let mut meta = Vec::with_capacity(128);
-    meta.extend_from_slice(name.as_bytes());
-    meta.push(0);
-    meta.extend_from_slice(data.len().to_string().as_bytes());
-    meta.resize(if meta.len() <= 128 { 128 } else { 1024 }, 0);
-    x.send_block_ack(0, &meta, crc).await?;
+    if protocol == Protocol::Ymodem {
+        // Block 0: file name NUL decimal-size, zero-padded (rb also appends
+        // mtime and mode, but every receiver treats those as optional)
+        let mut meta = Vec::with_capacity(128);
+        meta.extend_from_slice(name.as_bytes());
+        meta.push(0);
+        meta.extend_from_slice(data.len().to_string().as_bytes());
+        meta.resize(if meta.len() <= 128 { 128 } else { 1024 }, 0);
+        x.send_block_ack(0, &meta, crc).await?;
 
-    // The receiver re-arms with another mode byte before the data phase
-    x.wait_handshake(Duration::from_secs(15)).await?;
+        // The receiver re-arms with another mode byte before the data phase
+        x.wait_handshake(Duration::from_secs(15)).await?;
+    }
+
+    // XMODEM-1K is tied to CRC mode; a receiver that only knows the 8-bit
+    // checksum predates 1K blocks and would reject STX
+    let block = if protocol == Protocol::Ymodem || crc { 1024 } else { 128 };
 
     let mut sent = 0u64;
     let mut blk: u8 = 1;
-    for chunk in data.chunks(1024) {
-        if chunk.len() == 1024 {
+    for chunk in data.chunks(block) {
+        if chunk.len() == block {
             x.send_block_ack(blk, chunk, crc).await?;
         } else {
             let mut padded = vec![SUB; if chunk.len() <= 128 { 128 } else { 1024 }];
@@ -141,17 +168,20 @@ async fn run(x: &mut Xfer<'_>, name: &str, data: &[u8]) -> Result<(), Fail> {
 
     x.send_eot().await?;
 
-    // End the batch: the receiver asks for the next file, an all-zero header
-    // answers "none". Every data block is already acknowledged by now, so a
-    // receiver that skips this phase (or already gave up) still got the file —
-    // only real failures (port death, session close, cancel) propagate.
-    match x.wait_handshake(REPLY_TIMEOUT).await {
-        Ok(crc) => match x.send_block_ack(0, &[0u8; 128], crc).await {
-            Ok(()) | Err(Fail::Timeout(_)) => {}
+    if protocol == Protocol::Ymodem {
+        // End the batch: the receiver asks for the next file, an all-zero
+        // header answers "none". Every data block is already acknowledged by
+        // now, so a receiver that skips this phase (or already gave up) still
+        // got the file — only real failures (port death, session close,
+        // cancel) propagate.
+        match x.wait_handshake(REPLY_TIMEOUT).await {
+            Ok(crc) => match x.send_block_ack(0, &[0u8; 128], crc).await {
+                Ok(()) | Err(Fail::Timeout(_)) => {}
+                Err(e) => return Err(e),
+            },
+            Err(Fail::Timeout(_)) => {}
             Err(e) => return Err(e),
-        },
-        Err(Fail::Timeout(_)) => {}
-        Err(e) => return Err(e),
+        }
     }
     Ok(())
 }
@@ -187,7 +217,7 @@ impl Xfer<'_> {
                     Err(e) => return Err(Fail::Port(e.to_string())),
                 },
                 input = self.rx.recv() => match input {
-                    Some(SessionInput::YmodemCancel) => return Err(Fail::Cancelled),
+                    Some(SessionInput::TransferCancel) => return Err(Fail::Cancelled),
                     Some(SessionInput::Close) | None => return Err(Fail::Closed),
                     Some(_) => {}
                 },

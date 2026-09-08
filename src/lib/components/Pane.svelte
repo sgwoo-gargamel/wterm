@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Profile } from '$lib/ipc';
+	import type { Profile, TransferProtocol } from '$lib/ipc';
 	import { flushSync } from 'svelte';
 	import {
 		layoutState,
@@ -17,7 +17,8 @@
 	import { settingsState } from '$lib/stores/settings.svelte';
 	import { multiSend, toggleTarget } from '$lib/stores/multisend.svelte';
 	import resizeIcon from '@fluentui/svg-icons/icons/resize_20_regular.svg?raw';
-	import downloadIcon from '@fluentui/svg-icons/icons/arrow_download_20_regular.svg?raw';
+	import xmodemIcon from '$lib/icons/xmodem.svg?raw';
+	import ymodemIcon from '$lib/icons/ymodem.svg?raw';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import broomIcon from '@fluentui/svg-icons/icons/broom_20_regular.svg?raw';
 	import saveIcon from '@fluentui/svg-icons/icons/save_20_regular.svg?raw';
@@ -28,7 +29,7 @@
 	import { recordUse, type ProfileEntry } from '$lib/stores/profiles.svelte';
 	import { portsState, portUnavailable, refreshPorts } from '$lib/stores/ports.svelte';
 	import { t, translateReason } from '$lib/i18n.svelte';
-	import { clearTerminal } from '$lib/terminals';
+	import { clearTerminal, focusTerminal } from '$lib/terminals';
 	import TerminalView from './TerminalView.svelte';
 	import SendBox from './SendBox.svelte';
 	import ConnectForm from './ConnectForm.svelte';
@@ -184,32 +185,38 @@
 		session.write(new TextEncoder().encode(`stty rows ${session.rows} cols ${session.cols}\r`));
 	}
 
-	/** Serial only: pick a local file and push it to the target over YMODEM */
-	async function ymodemPick() {
+	/**
+	 * Serial only: pick a local file and push it to the target over XMODEM/YMODEM.
+	 * Port input is held while the dialog is up, so the receiver's poll byte
+	 * that arrives meanwhile starts the transfer at once instead of being
+	 * printed and lost (Tera Term gets the same effect from its frozen screen).
+	 */
+	async function transferPick(protocol: TransferProtocol) {
 		if (!session || session.transfer) return;
+		session.transferPrepare();
 		const path = await open({ multiple: false, directory: false });
-		if (typeof path === 'string') session.ymodemSend(path);
+		if (typeof path === 'string') session.transferSend(protocol, path);
+		else session.transferCancel();
 	}
 
 	/** Click on the transfer popup: cancel while sending, dismiss once finished */
 	function dismissTransfer() {
 		if (!session?.transfer) return;
-		if (session.transfer.status === 'active') session.ymodemCancel();
+		if (session.transfer.status === 'active') session.transferCancel();
 		else session.dismissTransfer();
 	}
 
 	let xferEl = $state<HTMLElement | null>(null);
 
-	// Same focus hand-off as the connect popup: Enter/Esc reach it without a
-	// click, and focus returns to the previous element when it goes away
+	// Focus the popup so Enter/Esc reach it without a click. When it goes
+	// away, focus goes to this tile's terminal rather than back to whatever
+	// had it: that was the toolbar button that opened the file dialog, which
+	// has been disabled (and so unfocusable) for the whole transfer.
 	$effect(() => {
 		if (!session?.transfer || !xferEl) return;
-		const previous = document.activeElement as HTMLElement | null;
+		const id = session.id;
 		xferEl.focus();
-		if (!previous || previous === xferEl) return;
-		return () => {
-			if (previous.isConnected) previous.focus();
-		};
+		return () => focusTerminal(id);
 	});
 
 	function fmtBytes(n: number): string {
@@ -400,26 +407,6 @@
 					onsend={sendLine}
 				/>
 			</div>
-			{#if session.profile.type === 'serial' && session.status === 'connected'}
-				<!-- Serial has no size protocol, so offer a manual stty to the target -->
-				<button type="button" class="tb" title={t('pane.sendSize')} onclick={sendStty}>
-					{@html resizeIcon}
-				</button>
-				<!-- YMODEM upload to the target (its receiver must already be running) -->
-				<button
-					type="button"
-					class="tb"
-					title={t('ymodem.send')}
-					disabled={!!session.transfer}
-					onclick={ymodemPick}
-				>
-					{@html downloadIcon}
-				</button>
-			{/if}
-			<!-- Wipe the screen and scrollback of this tile's terminal -->
-			<button type="button" class="tb" title={t('pane.clear')} onclick={() => clearTerminal(session.id)}>
-				{@html broomIcon}
-			</button>
 			<!-- Opt this tile into toolbar multi-send -->
 			<label class="multi" title={t('multi.target')}>
 				<span>{t('multi.label')}</span>
@@ -429,36 +416,71 @@
 					onchange={(e) => toggleTarget(session.id, e.currentTarget.checked)}
 				/>
 			</label>
-			<button
-				type="button"
-				class="tb"
-				class:logging={!!session.logPath}
-				title={session.logPath ? `${t('log.stop')} — ${session.logPath}` : t('log.title')}
-				onclick={openLogMenu}
-			>
-				{@html saveIcon}
-			</button>
-		{/if}
-		{#if logMenu && session}
-			<div class="log-menu" bind:this={logMenuEl}>
-				<label>
-					<span>{t('log.fileName')}</span>
-					<input type="text" bind:value={logName} spellcheck="false" />
-				</label>
-				<label class="check">
-					<input type="checkbox" bind:checked={withTimestamp} />
-					<span>{t('log.timestamp')}</span>
-				</label>
-				<label class="check">
-					<input type="checkbox" bind:checked={plainText} />
-					<span>{t('log.plain')}</span>
-				</label>
-				<p class="preview">
-					{logName || logBaseName(session.profile)}_{logTimestamp()}.log
-				</p>
-				{#if logError}<p class="log-error">{logError}</p>{/if}
-				<button type="button" class="start" onclick={startLog}>{t('log.start')}</button>
+			<!-- Anchors the log popup to its button, which sits at different
+			     offsets depending on which buttons this session type shows -->
+			<div class="log-slot">
+				<button
+					type="button"
+					class="tb"
+					class:logging={!!session.logPath}
+					title={session.logPath ? `${t('log.stop')} — ${session.logPath}` : t('log.title')}
+					onclick={openLogMenu}
+				>
+					{@html saveIcon}
+				</button>
+				{#if logMenu && session}
+					<div class="log-menu" bind:this={logMenuEl}>
+						<label>
+							<span>{t('log.fileName')}</span>
+							<input type="text" bind:value={logName} spellcheck="false" />
+						</label>
+						<label class="check">
+							<input type="checkbox" bind:checked={withTimestamp} />
+							<span>{t('log.timestamp')}</span>
+						</label>
+						<label class="check">
+							<input type="checkbox" bind:checked={plainText} />
+							<span>{t('log.plain')}</span>
+						</label>
+						<p class="preview">
+							{logName || logBaseName(session.profile)}_{logTimestamp()}.log
+						</p>
+						{#if logError}<p class="log-error">{logError}</p>{/if}
+						<button type="button" class="start" onclick={startLog}>{t('log.start')}</button>
+					</div>
+				{/if}
 			</div>
+			{#if session.profile.type === 'serial' && session.status === 'connected'}
+				<!-- XMODEM / YMODEM upload to the target (its receiver must already be running) -->
+				<div class="xfer-group">
+					<button
+						type="button"
+						class="tb xfer"
+						title={t('xmodem.send')}
+						disabled={!!session.transfer}
+						onclick={() => transferPick('xmodem')}
+					>
+						{@html xmodemIcon}
+					</button>
+					<button
+						type="button"
+						class="tb xfer"
+						title={t('ymodem.send')}
+						disabled={!!session.transfer}
+						onclick={() => transferPick('ymodem')}
+					>
+						{@html ymodemIcon}
+					</button>
+				</div>
+				<!-- Serial has no size protocol, so offer a manual stty to the target -->
+				<button type="button" class="tb" title={t('pane.sendSize')} onclick={sendStty}>
+					{@html resizeIcon}
+				</button>
+			{/if}
+			<!-- Wipe the screen and scrollback of this tile's terminal -->
+			<button type="button" class="tb" title={t('pane.clear')} onclick={() => clearTerminal(session.id)}>
+				{@html broomIcon}
+			</button>
 		{/if}
 		<button
 			type="button"
@@ -537,12 +559,12 @@
 						/>
 						<p class="progress-title" class:failed={xfer.status === 'failed'}>
 							{xfer.status === 'done'
-								? t('ymodem.done')
+								? t('transfer.done')
 								: xfer.status === 'failed'
-									? t('ymodem.failed')
-									: xfer.sent === 0
-										? t('ymodem.waiting')
-										: t('ymodem.sending')}
+									? t('transfer.failed')
+									: xfer.handshaked
+										? t('transfer.sending')
+										: t('transfer.waiting')}
 						</p>
 						{#if xfer.name}<p class="xfer-name">{xfer.name}</p>{/if}
 						<div class="xfer-bar">
@@ -555,8 +577,10 @@
 						<p class="progress-detail">{fmtBytes(xfer.sent)} / {fmtBytes(xfer.size)} ({pct}%)</p>
 						{#if xfer.status === 'failed' && xfer.reason}
 							<p class="xfer-reason">{translateReason(xfer.reason)}</p>
-						{:else if xfer.status === 'active' && xfer.sent === 0}
-							<p class="progress-detail">{t('ymodem.waitingHint')}</p>
+						{/if}
+						<!-- Which receiver to start: while waiting, and again when nothing answered -->
+						{#if (xfer.status === 'active' && !xfer.handshaked) || xfer.reason === 'handshake-timeout'}
+							<p class="progress-detail">{t(`${xfer.protocol}.waitingHint`)}</p>
 						{/if}
 						<p class="progress-hint">
 							{xfer.status === 'active' ? t('progress.cancelHint') : t('progress.closeHint')}
@@ -661,7 +685,9 @@
 		position: relative;
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		/* Icon pitch is the button width plus this: 24 + 3 leaves the 20px
+		   glyphs 7px apart, tight enough to read as one toolbar */
+		gap: 3px;
 		/* 1px, not the toolbar's 2px: this strip repeats once per tile and is
 		   mostly empty next to its title, so at equal height it reads heavier than
 		   the window bar. 31px against that bar's 33px evens the two out. */
@@ -671,6 +697,14 @@
 		border-bottom: 1px solid var(--titlebar-border);
 		flex-shrink: 0;
 		cursor: grab;
+	}
+	/* The two transfer buttons are one pair: closer to each other than to
+	   whatever sits on either side of them */
+	.xfer-group {
+		display: flex;
+	}
+	.tb.xfer {
+		width: 21px;
 	}
 	.tb.logging {
 		/* The bar follows the theme, so the recording tint does too */
@@ -690,10 +724,14 @@
 		margin: 0;
 		cursor: pointer;
 	}
+	.log-slot {
+		position: relative;
+		display: flex;
+	}
 	.log-menu {
 		position: absolute;
-		top: calc(100% + 2px);
-		right: 76px;
+		top: calc(100% + 4px);
+		right: 0;
 		z-index: 40;
 		display: flex;
 		flex-direction: column;
@@ -812,7 +850,9 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 30px;
+		/* 4px wider than the glyph it holds: enough for a hover chip, not so
+		   much that the row spreads out */
+		width: 24px;
 		height: 28px;
 		padding: 0;
 		background: none;
@@ -880,7 +920,7 @@
 		padding: 0 1rem;
 		text-align: center;
 	}
-	/* --- YMODEM transfer card (rides the connect popup's card styles) --- */
+	/* --- XMODEM/YMODEM transfer card (rides the connect popup's card styles) --- */
 	.xfer-name {
 		margin: 0;
 		max-width: 100%;

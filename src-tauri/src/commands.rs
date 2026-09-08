@@ -5,7 +5,7 @@ use tauri::State;
 use tauri::{AppHandle, Emitter};
 
 use crate::error::Result;
-use crate::session::{OutputEvent, Profile, SessionInput, SessionManager};
+use crate::session::{OutputEvent, Profile, SessionInput, SessionManager, TransferProtocol};
 
 #[derive(Serialize)]
 pub struct PortInfo {
@@ -298,6 +298,26 @@ pub async fn session_write(
     state.send(&id, SessionInput::Data(data)).await
 }
 
+/// Serial only: the file dialog is opening. Port input is held back so the
+/// receiver's poll byte is there for the transfer that follows; call
+/// session_transfer_cancel if the dialog is dismissed.
+#[tauri::command]
+pub async fn session_transfer_prepare(state: State<'_, SessionManager>, id: String) -> Result<()> {
+    state.send(&id, SessionInput::TransferPrepare).await
+}
+
+/// Serial only: push a local file to the target over XMODEM.
+/// The receiver (rx, loadx, …) must already be running on the target.
+#[tauri::command]
+pub async fn session_xmodem_send(
+    state: State<'_, SessionManager>,
+    id: String,
+    path: String,
+) -> Result<()> {
+    let protocol = TransferProtocol::Xmodem;
+    state.send(&id, SessionInput::TransferSend { path, protocol }).await
+}
+
 /// Serial only: push a local file to the target over YMODEM.
 /// The receiver (rb, loady, …) must already be running on the target.
 #[tauri::command]
@@ -306,13 +326,15 @@ pub async fn session_ymodem_send(
     id: String,
     path: String,
 ) -> Result<()> {
-    state.send(&id, SessionInput::YmodemSend { path }).await
+    let protocol = TransferProtocol::Ymodem;
+    state.send(&id, SessionInput::TransferSend { path, protocol }).await
 }
 
-/// Abort the YMODEM transfer in progress, if any
+/// Abort the XMODEM/YMODEM transfer in progress, or release the input held
+/// by session_transfer_prepare when the file dialog was dismissed
 #[tauri::command]
-pub async fn session_ymodem_cancel(state: State<'_, SessionManager>, id: String) -> Result<()> {
-    state.send(&id, SessionInput::YmodemCancel).await
+pub async fn session_transfer_cancel(state: State<'_, SessionManager>, id: String) -> Result<()> {
+    state.send(&id, SessionInput::TransferCancel).await
 }
 
 #[tauri::command]

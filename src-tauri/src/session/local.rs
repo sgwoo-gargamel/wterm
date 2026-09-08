@@ -151,7 +151,7 @@ pub fn spawn(
                     }
                 }
                 SessionInput::Close => break,
-                _ => {} // YMODEM is serial-only
+                _ => {} // XMODEM/YMODEM are serial-only
             }
         }
         let _ = killer.kill();

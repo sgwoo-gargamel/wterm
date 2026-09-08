@@ -3,7 +3,9 @@ pub mod logger;
 pub mod serial;
 pub mod ssh;
 pub mod telnet;
-mod ymodem;
+mod xymodem;
+
+pub use xymodem::Protocol as TransferProtocol;
 
 pub use logger::SessionLogger;
 
@@ -49,8 +51,12 @@ pub enum OutputEvent {
     Data { bytes: Vec<u8> },
     Connected,
     Disconnected { reason: String },
-    /// A YMODEM transfer began (after the local file was read successfully)
+    /// An XMODEM/YMODEM transfer began (after the local file was read successfully)
     TransferStart { name: String, size: u64 },
+    /// The receiver answered and the first block is going out: the UI can
+    /// stop saying "waiting for the receiver" before the first ACK, which a
+    /// receiver that erases flash on block 1 may take a second to send
+    TransferHandshake,
     TransferProgress { sent: u64, size: u64 },
     TransferDone { name: String },
     /// `reason` is a stable token (cancelled, remote-cancelled,
@@ -63,11 +69,21 @@ pub enum OutputEvent {
 pub enum SessionInput {
     Data(Vec<u8>),
     Resize { cols: u16, rows: u16 },
-    /// Serial only: send the file at `path` to the target via YMODEM.
-    /// The target's receiver (rb, loady, …) must already be running.
-    YmodemSend { path: String },
-    /// Abort the YMODEM transfer in progress, if any
-    YmodemCancel,
+    /// Serial only: the user is picking a file to send. Port input is held
+    /// back from the terminal until TransferSend (which takes the receiver's
+    /// poll byte from it) or TransferCancel (which releases it) arrives, the
+    /// way Tera Term's frozen screen keeps the `C` for its XMODEM sender.
+    TransferPrepare,
+    /// Serial only: send the file at `path` to the target via XMODEM or
+    /// YMODEM. The target's receiver (rx/rb, loadx/loady, …) must already be
+    /// running.
+    TransferSend {
+        path: String,
+        protocol: TransferProtocol,
+    },
+    /// Abort the XMODEM/YMODEM transfer in progress, or drop a
+    /// TransferPrepare hold when the file dialog was dismissed
+    TransferCancel,
     Close,
 }
 

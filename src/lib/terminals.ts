@@ -93,6 +93,11 @@ export interface TermBundle {
  */
 const cache = new Map<string, TermBundle>();
 
+/** Put keyboard focus in a session's terminal, if it has been created */
+export function focusTerminal(sessionId: string) {
+	cache.get(sessionId)?.term.focus();
+}
+
 /** Get the cached terminal for a session, creating and wiring it on first use */
 export function getTerminal(session: Session): TermBundle {
 	const existing = cache.get(session.id);

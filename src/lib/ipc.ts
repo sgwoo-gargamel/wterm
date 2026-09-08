@@ -36,6 +36,8 @@ export type OutputEvent =
 	| { type: 'connected' }
 	| { type: 'disconnected'; reason: string }
 	| { type: 'transfer_start'; name: string; size: number }
+	// The receiver answered; blocks are going out (first ACK may still take a while)
+	| { type: 'transfer_handshake' }
 	| { type: 'transfer_progress'; sent: number; size: number }
 	| { type: 'transfer_done'; name: string }
 	// reason: stable token (cancelled, remote-cancelled, handshake-timeout,
@@ -84,13 +86,24 @@ export function writeSession(id: string, data: Uint8Array): Promise<void> {
 	return invoke('session_write', { id, data: Array.from(data) });
 }
 
-/** Serial only: send a local file to the target via YMODEM (receiver must be running) */
-export function ymodemSend(id: string, path: string): Promise<void> {
-	return invoke('session_ymodem_send', { id, path });
+export type TransferProtocol = 'xmodem' | 'ymodem';
+
+/**
+ * Serial only: the file dialog is opening. Port input is held back so the
+ * receiver's poll byte is available for the transfer; follow with
+ * transferSend, or transferCancel if the dialog is dismissed.
+ */
+export function transferPrepare(id: string): Promise<void> {
+	return invoke('session_transfer_prepare', { id });
 }
 
-export function ymodemCancel(id: string): Promise<void> {
-	return invoke('session_ymodem_cancel', { id });
+/** Serial only: send a local file to the target via XMODEM/YMODEM (receiver must be running) */
+export function transferSend(id: string, protocol: TransferProtocol, path: string): Promise<void> {
+	return invoke(`session_${protocol}_send`, { id, path });
+}
+
+export function transferCancel(id: string): Promise<void> {
+	return invoke('session_transfer_cancel', { id });
 }
 
 export function resizeSession(id: string, cols: number, rows: number): Promise<void> {
