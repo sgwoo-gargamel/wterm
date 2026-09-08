@@ -4,7 +4,8 @@
 
 	/**
 	 * Send box: the visible field is where the line is typed. Focusing it drops down
-	 * the globally shared history of previously sent lines, nothing else.
+	 * the globally shared history of previously sent lines, and picking one from
+	 * there sends it straight away.
 	 * `onsend` reports whether the line was actually delivered — only those are kept.
 	 */
 	let {
@@ -117,10 +118,17 @@
 		panel.querySelectorAll('.entry')[historyIndex]?.scrollIntoView({ block: 'nearest' });
 	});
 
-	/** Clicking a history line loads it for editing; sending stays an explicit step */
+	/** Picking a history line sends it there and then — no second keystroke */
 	function useHistory(line: string) {
-		text = line;
 		historyIndex = -1;
+		if (noSend) {
+			// Nothing to send it to: park it in the field so it is ready when there is
+			text = line;
+			input?.focus();
+			return;
+		}
+		if (onsend(line)) recordSend(line);
+		text = '';
 		input?.focus();
 	}
 </script>
